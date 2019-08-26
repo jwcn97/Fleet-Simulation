@@ -1,0 +1,10 @@
+shift0 - work shift with break
+shift1 - work shift
+shift2 - work shift 2
+shift3 - first shift same (original)
+shift4 - second shift same
+shfit5 - national express
+shift6 - taxi
+shift7 - meal delivery
+shift8 - goods delivery
+shift9 - long work shift

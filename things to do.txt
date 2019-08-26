@@ -1,0 +1,13 @@
+D2
+calculate amount of charge needed for the next drive
+
+D3
+data:
+(telematics data)
+- dataId, datetime, vrnId, lat & long, battkW, events, mpkw, mileage, inDepot, chargePt, currentChargeRate, previousLeavetime, previousEntertime, predictedLeavetime(morning)
+
+
+b)
+find similar trips
+assume one end of the trip is the depo
+perform machine learning to estimate when vehicle is going to enter depot next
