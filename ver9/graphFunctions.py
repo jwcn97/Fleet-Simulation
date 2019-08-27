@@ -17,8 +17,8 @@ def DFFunction(df, col):
     DF = DF.T.stack().T
     return DF
 
-# create x-axis hour labels
-def createSlots(startTime, modulo):
+# create x-axis hour ticker labels
+def labelTickers(startTime, modulo):
     slots = []
     # show tickers only for values that are divisibly by 3 (e.g. 3,6,9...)
     for slot in range(24*5*chunks+2):
@@ -67,7 +67,7 @@ def compareCars(folder, name, sim, algo, total_cars, company):
 
     ax.yaxis.set_ticks(np.arange(0,total_cars,1))
     ax.xaxis.set_ticks(testDF.index)
-    ax.set_xticklabels(createSlots(6, 3), fontdict={'fontsize':18})
+    ax.set_xticklabels(labelTickers(6, 3), fontdict={'fontsize':18})
     ax.set_xlim([testDF.index[0]-dt.timedelta(hours=1), testDF.index[-1]+dt.timedelta(hours=1)])
     
     ax.set_title('Charge (kW)', {'fontsize': 20})
@@ -121,7 +121,7 @@ def compareAlgo(folder, name, sim, car, total_algos, company):
     ax.set_ylabel('Algorithms', fontdict={'fontsize':18})
     
     ax.xaxis.set_ticks(testDF.index)
-    ax.set_xticklabels(createSlots(6, 3), fontdict={'fontsize':18})
+    ax.set_xticklabels(labelTickers(6, 3), fontdict={'fontsize':18})
     ax.set_xlabel('Hours', fontdict={'fontsize':18})
     ax.set_xlim([testDF.index[0]-dt.timedelta(hours=1), testDF.index[-1]+dt.timedelta(hours=1)])
     

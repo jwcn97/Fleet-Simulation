@@ -5,8 +5,9 @@ import time
 from simFunctionsVer9 import *
 
 # SELECT RAPID CHARGE INFORMATION
-RCduration = 30     # RAPID CHARGE DURATION (MINUTES)
-RCperc = 20         # WHAT PERCENTAGE TO START RAPID CHARGING (%)
+rcDuration = 30     # RAPID CHARGE DURATION (MINUTES)
+rcPerc = 20         # WHAT PERCENTAGE TO START RAPID CHARGING (%)
+rcRate = 50         # RATE OF RAPID CHARGING (KW/HR)
 
 # CHOOSE START TIME AND RUN TIME
 startTime = readTime("2019-01-01 06:00:00")
@@ -41,29 +42,29 @@ for priceType in range(0,2):
                 fleetData = fleetDF.loc[fleetDF.index == fleetType]
                 print("   finish importing data")
 
-                showDF, dumb_sim, dumbRC = runSimulation(startTime, runTime, RCduration, RCperc,
-                                        fleetData, drivingDF, allShiftsDF, pricesDF, company,
-                                        dumbCharge)
+                dumb_sim, dumbRC = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+                                    fleetData, drivingDF, allShiftsDF, pricesDF, company,
+                                    dumbCharge)
                 print("   finish dumb charging")
 
-                showDF, smart_leavetime_sim, smart_leavetimeRC = runSimulation(startTime, runTime, RCduration, RCperc,
-                                        fleetData, drivingDF, allShiftsDF, pricesDF, company,
-                                        smartCharge_leavetime)
+                smart_leavetime_sim, smart_leavetimeRC = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+                                    fleetData, drivingDF, allShiftsDF, pricesDF, company,
+                                    smartCharge_leavetime)
                 print("   finish leavetime charging")
 
-                showDF, smart_batt_sim, smart_battRC = runSimulation(startTime, runTime, RCduration, RCperc,
-                                        fleetData, drivingDF, allShiftsDF, pricesDF, company,
-                                        smartCharge_batt)
+                smart_batt_sim, smart_battRC = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+                                    fleetData, drivingDF, allShiftsDF, pricesDF, company,
+                                    smartCharge_batt)
                 print("   finish battleft charging")
 
-                showDF, smart_sim, smartRC = runSimulation(startTime, runTime, RCduration, RCperc,
-                                        fleetData, drivingDF, allShiftsDF, pricesDF, company,
-                                        smartCharge_battOverLeavetime)
+                smart_sim, smartRC = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+                                    fleetData, drivingDF, allShiftsDF, pricesDF, company,
+                                    smartCharge_battOverLeavetime)
                 print("   finish battleft/leavetime charging")
 
-                showDF, cost_sim, costRC = runSimulation(startTime, runTime, RCduration, RCperc,
-                                        fleetData, drivingDF, allShiftsDF, pricesDF, company,
-                                        costSensitiveCharge)
+                cost_sim, costRC = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+                                    fleetData, drivingDF, allShiftsDF, pricesDF, company,
+                                    costSensitiveCharge)
                 print("   finish cost-sensitive charging")
 
                 # get the battery size and relevent costs

@@ -5,14 +5,14 @@ import time
 
 # CHOOSE NUMBER OF CHUNKS IN AN HOUR
 #   e.g. 3 chunks would divide the hour into 20-min shifts
-chunks = 2
+chunks = 4
 
 from supportFunctions import *
 
 #################################
 # INCREASE BATT DURING CHARGE
 #################################
-def dumbCharge(carDataDF, depot, shiftsByCar, time,
+def dumbCharge(time, carDataDF, depot, shiftsByCar, 
                availablePower, simulationDF, chargePtDF, toChargeDF,
                pricesDF, company, totalCost):
     # SELECT CARS IN DEPOT THAT ARE NOT FULLY CHARGED
@@ -58,152 +58,144 @@ def dumbCharge(carDataDF, depot, shiftsByCar, time,
             # UPDATE TO-CHARGE DF
             toChargeDF.loc[car, 'chargeRate'] = chargeRate
 
-        # FOR CARS IN DEPOT THAT ARE FULLY CHARGED
-
     return carDataDF, chargePtDF, toChargeDF, totalCost
 
 #########################################
 # INCREASE BATT DURING CHARGE (LEAVETIME)
 #########################################
-def smartCharge_leavetime(carDataDF, depot, shiftsByCar, time,
+def smartCharge_leavetime(time, carDataDF, depot, shiftsByCar, 
                           availablePower, simulationDF, chargePtDF, toChargeDF,
                           pricesDF, company, totalCost):
-    # IF THERE ARE CARS IN THE DEPOT
-    if len(depot) > 0:
+    # CREATE A LIST FOR CARS AND THEIR LEAVETIMES (TIME UNTIL CAR LEAVSE DEPOT)
+    leaveTList = []
 
-        # CREATE A LIST FOR CARS AND THEIR LEAVETIMES (TIME UNTIL CAR LEAVSE DEPOT)
-        leaveTList = []
+    # # ***** FIND LEAVETIMES AND APPEND TO A LIST *****
+    for cars in range(0, len(depot)):
+        car = depot[cars]
 
-        # # ***** FIND LEAVETIMES AND APPEND TO A LIST *****
-        for cars in range(0, len(depot)):
-            car = depot[cars]
+        # READ INDEX OF LATEST SHIFT AND INDEX OF THE LAST SHIFT
+        shiftIndex = carDataDF.loc[car, 'shiftIndex']
+        lastShiftIndex = len(shiftsByCar[str(car)])
+        # IF NEXT SHIFT EXISTS, TAKE START TIME OF NEXT SHIFT
+        if (shiftIndex + 1) < lastShiftIndex:
+            nextStart = shiftsByCar[str(car)].loc[shiftIndex+1, 'startShift']
 
-            # READ INDEX OF LATEST SHIFT AND INDEX OF THE LAST SHIFT
-            shiftIndex = carDataDF.loc[car, 'shiftIndex']
-            lastShiftIndex = len(shiftsByCar[str(car)])
-            # IF NEXT SHIFT EXISTS, TAKE START TIME OF NEXT SHIFT
-            if (shiftIndex + 1) < lastShiftIndex:
-                nextStart = shiftsByCar[str(car)].loc[shiftIndex+1, 'startShift']
+        # IF SHIFT INDEX GOES BEYOND LAST SHIFT, TAKE ARBITRARY LEAVETIME
+        else:
+            lastStart = shiftsByCar[str(car)].loc[lastShiftIndex-1, 'startShift']
+            lastDay = readTime(lastStart).date() + dt.timedelta(days=1)
+            nextStart = readTime(str(lastDay) + " 23:59:59")
 
-            # IF SHIFT INDEX GOES BEYOND LAST SHIFT, TAKE ARBITRARY LEAVETIME
-            else:
-                lastStart = shiftsByCar[str(car)].loc[lastShiftIndex-1, 'startShift']
-                lastDay = readTime(lastStart).date() + dt.timedelta(days=1)
-                nextStart = readTime(str(lastDay) + " 23:59:59")
+        # CALCULATE TIME LEFT UNTIL CAR LEAVES AND APPEND TO LIST
+        hrsLeft = ((rereadTime(nextStart) - rereadTime(time)).total_seconds())/(60*60)
+        leaveTList.append([car, hrsLeft])
 
-            # CALCULATE TIME LEFT UNTIL CAR LEAVES AND APPEND TO LIST
-            hrsLeft = ((rereadTime(nextStart) - rereadTime(time)).total_seconds())/(60*60)
-            leaveTList.append([car, hrsLeft])
+    # ***** CONVERT LIST INTO DATAFRAME AND SORT *****
+    leaveTimes = pd.DataFrame.from_records(leaveTList, columns=['car','hrsLeft'])
+    leaveTimes = leaveTimes.sort_values(by=['hrsLeft'])
+    leaveTimes = leaveTimes.reset_index(drop=True)
 
-        # ***** CONVERT LIST INTO DATAFRAME AND SORT *****
-        leaveTimes = pd.DataFrame.from_records(leaveTList, columns=['car','hrsLeft'])
-        leaveTimes = leaveTimes.sort_values(by=['hrsLeft'])
-        leaveTimes = leaveTimes.reset_index(drop=True)
+    # ***** CHARGE CARS IN SORTED ORDER *****
+    for row in range(0, len(leaveTimes)):
+        # READ IN DATA FOR SELECTED CAR
+        car = leaveTimes.loc[row, 'car']
+        batt = carDataDF.loc[car, 'battkW']
+        battSize = carDataDF.loc[car, 'battSize']
+        chargePt = carDataDF.loc[car, 'chargePt']
 
-        # ***** CHARGE CARS IN SORTED ORDER *****
-        for row in range(0, len(leaveTimes)):
-            # READ IN DATA FOR SELECTED CAR
-            car = leaveTimes.loc[row, 'car']
-            batt = carDataDF.loc[car, 'battkW']
-            battSize = carDataDF.loc[car, 'battSize']
-            chargePt = carDataDF.loc[car, 'chargePt']
+        # IF CAR BATT IS NOT 100%, CHARGE CAR
+        if batt < battSize:
+            # ALLOCATE CHARGE PT IF CAR DOESN'T HAVE ONE
+            pt, carDataDF, chargePtDF = findChargePt(carDataDF, car, chargePtDF)
+            chargeRate = 0
 
-            # IF CAR BATT IS NOT 100%, CHARGE CAR
-            if batt < battSize:
-                # ALLOCATE CHARGE PT IF CAR DOESN'T HAVE ONE
-                pt, carDataDF, chargePtDF = findChargePt(carDataDF, car, chargePtDF)
-                chargeRate = 0
+            # IF CAR HAS A VALID CHARGE PT:
+            if not np.isnan(pt):
+                # READ MAX RATE
+                maxRate = chargePtDF.loc[pt, 'maxRate']
+                # CALCULATE THE ENERGY LEFT IF CAR WAS CHARGED AT MAX
+                energyLeft = availablePower - maxRate
 
-                # IF CAR HAS A VALID CHARGE PT:
-                if not np.isnan(pt):
-                    # READ MAX RATE
-                    maxRate = chargePtDF.loc[pt, 'maxRate']
-                    # CALCULATE THE ENERGY LEFT IF CAR WAS CHARGED AT MAX
-                    energyLeft = availablePower - maxRate
+                # IF THERE IS ENOUGH ENERGY FOR MAX RATE, CHARGE CAR AT MAX
+                if energyLeft >= 0:
+                    chargeRate = maxRate
 
-                    # IF THERE IS ENOUGH ENERGY FOR MAX RATE, CHARGE CAR AT MAX
-                    if energyLeft >= 0:
-                        chargeRate = maxRate
+                # IF THERE ISN'T ENOUGH FOR MAX RATE, CHARGE USING REMAINING POWER
+                elif energyLeft < 0 and energyLeft > -maxRate:
+                    chargeRate = availablePower
 
-                    # IF THERE ISN'T ENOUGH FOR MAX RATE, CHARGE USING REMAINING POWER
-                    elif energyLeft < 0 and energyLeft > -maxRate:
-                        chargeRate = availablePower
+                # IF VEHICLE IS PLUGGED IN BUT NOT ALLOCATED CHARGE
+                else:
+                    chargeRate = 0
 
-                    # IF VEHICLE IS PLUGGED IN BUT NOT ALLOCATED CHARGE
-                    else:
-                        chargeRate = 0
+            # ADJUST TO-CHARGE DF WITH CHARGE RATE
+            toChargeDF.loc[car, 'chargeRate'] = chargeRate
 
-                # ADJUST TO-CHARGE DF WITH CHARGE RATE
-                toChargeDF.loc[car, 'chargeRate'] = chargeRate
-
-                # ADJUST AVAILABLE POWER
-                availablePower -= chargeRate
+            # ADJUST AVAILABLE POWER
+            availablePower -= chargeRate
 
     return carDataDF, chargePtDF, toChargeDF, totalCost
 
 ######################################
 # INCREASE BATT DURING CHARGE (BATT)
 ######################################
-def smartCharge_batt(carDataDF, depot, shiftsByCar, time,
+def smartCharge_batt(time, carDataDF, depot, shiftsByCar, 
                      availablePower, simulationDF, chargePtDF, toChargeDF,
                      pricesDF, company, totalCost):
-    # IF THERE ARE CARS IN THE DEPOT
-    if len(depot) >= 1:
+    # CREATE A LIST FOR CARS AND THEIR BATT NEEDED
+    battNeededList = []
 
-        # CREATE A LIST FOR CARS AND THEIR BATT NEEDED
-        battNeededList = []
+    # ***** FOR ALL CARS, FIND BATT NEEEDED UNTIL FULLY CHARGED *****
+    for cars in range(0, len(depot)):
+        carNum = depot[cars]
 
-        # ***** FOR ALL CARS, FIND BATT NEEEDED UNTIL FULLY CHARGED *****
-        for cars in range(0, len(depot)):
-            carNum = depot[cars]
+        # CALCULATE BATTERY NEEDED AND APPEND TO LIST
+        battLeft = abs(carDataDF.loc[carNum,'battSize']-carDataDF.loc[carNum,'battkW'])
+        battNeededList.append([carNum, battLeft])
 
-            # CALCULATE BATTERY NEEDED AND APPEND TO LIST
-            battLeft = abs(carDataDF.loc[carNum,'battSize']-carDataDF.loc[carNum,'battkW'])
-            battNeededList.append([carNum, battLeft])
+    # ***** CONVERT LIST INTO DATAFRAME AND SORT *****
+    battNeeded = pd.DataFrame.from_records(battNeededList, columns=['car','battLeft'])
+    battNeeded = battNeeded.sort_values(by=['battLeft'], ascending=False)
+    battNeeded = battNeeded.reset_index(drop=True)
 
-        # ***** CONVERT LIST INTO DATAFRAME AND SORT *****
-        battNeeded = pd.DataFrame.from_records(battNeededList, columns=['car','battLeft'])
-        battNeeded = battNeeded.sort_values(by=['battLeft'], ascending=False)
-        battNeeded = battNeeded.reset_index(drop=True)
+    # ***** CHARGE CARS IN SORTED ORDER *****
+    for row in range(0, len(battNeeded)):
+        # READ IN DATA FOR SELECTED CAR
+        car = battNeeded.loc[row, 'car']
+        batt = carDataDF.loc[car, 'battkW']
+        battSize = carDataDF.loc[car, 'battSize']
+        chargePt = carDataDF.loc[car, 'chargePt']
 
-        # ***** CHARGE CARS IN SORTED ORDER *****
-        for row in range(0, len(battNeeded)):
-            # READ IN DATA FOR SELECTED CAR
-            car = battNeeded.loc[row, 'car']
-            batt = carDataDF.loc[car, 'battkW']
-            battSize = carDataDF.loc[car, 'battSize']
-            chargePt = carDataDF.loc[car, 'chargePt']
+        # IF CAR BATT IS NOT 100%, CHARGE CAR
+        if batt < battSize:
+            # ALLOCATE CHARGE PT IF CAR DOESN'T HAVE ONE
+            pt, carDataDF, chargePtDF = findChargePt(carDataDF, car, chargePtDF)
+            chargeRate = 0
 
-            # IF CAR BATT IS NOT 100%, CHARGE CAR
-            if batt < battSize:
-                # ALLOCATE CHARGE PT IF CAR DOESN'T HAVE ONE
-                pt, carDataDF, chargePtDF = findChargePt(carDataDF, car, chargePtDF)
-                chargeRate = 0
+            # IF CAR HAS A VALID CHARGE PT
+            if not np.isnan(pt):
+                # READ MAX RATE
+                maxRate = chargePtDF.loc[pt, 'maxRate']
+                # CALCULATE THE ENERGY LEFT IF CAR WAS CHARGED AT MAX
+                energyLeft = availablePower - maxRate
 
-                # IF CAR HAS A VALID CHARGE PT
-                if not np.isnan(pt):
-                    # READ MAX RATE
-                    maxRate = chargePtDF.loc[pt, 'maxRate']
-                    # CALCULATE THE ENERGY LEFT IF CAR WAS CHARGED AT MAX
-                    energyLeft = availablePower - maxRate
+                # IF THERE IS ENOUGH ENERGY FOR MAX RATE, CHARGE CAR AT MAX
+                if energyLeft >= 0:
+                    chargeRate = maxRate
 
-                    # IF THERE IS ENOUGH ENERGY FOR MAX RATE, CHARGE CAR AT MAX
-                    if energyLeft >= 0:
-                        chargeRate = maxRate
+                # IF THERE ISN'T ENOUGH FOR MAX RATE,  CHARGE USING REMAINING POWER
+                elif energyLeft < 0 and energyLeft > -maxRate:
+                    chargeRate = availablePower
 
-                    # IF THERE ISN'T ENOUGH FOR MAX RATE,  CHARGE USING REMAINING POWER
-                    elif energyLeft < 0 and energyLeft > -maxRate:
-                        chargeRate = availablePower
+                # IF VEHICLE IS PLUGGED IN BUT NOT ALLOCATED CHARGE
+                else:
+                    chargeRate = 0
 
-                    # IF VEHICLE IS PLUGGED IN BUT NOT ALLOCATED CHARGE
-                    else:
-                        chargeRate = 0
+            # ADJUST TO-CHARGE DF WITH CHARGE RATE
+            toChargeDF.loc[car, 'chargeRate'] = chargeRate
 
-                # ADJUST TO-CHARGE DF WITH CHARGE RATE
-                toChargeDF.loc[car, 'chargeRate'] = chargeRate
-
-                # ADJUST AVAILABLE POWER
-                availablePower -= chargeRate
+            # ADJUST AVAILABLE POWER
+            availablePower -= chargeRate
 
     return carDataDF, chargePtDF, toChargeDF, totalCost
 
@@ -212,82 +204,79 @@ def smartCharge_batt(carDataDF, depot, shiftsByCar, time,
 ############################################
 # PRIORITY = BATT NEEDED/TIME LEFT IN DEPOT
 # CHARGE RATE = (PRIORITY/SUM OF ALL PRIORITIES)*AVAILABLE POWER
-def smartCharge_battOverLeavetime(carDataDF, depot, shiftsByCar, time,
+def smartCharge_battOverLeavetime(time, carDataDF, depot, shiftsByCar,
                      availablePower, simulationDF, chargePtDF, toChargeDF,
                      pricesDF, company, totalCost):
-    # IF THERE ARE CARS IN THE DEPOT
-    if len(depot) >= 1:
+    # CREATE A LIST FOR CARS AND THEIR LEAVETIMES AND BATT NEEDED
+    priorityRows = []
 
-        # CREATE A LIST FOR CARS AND THEIR LEAVETIMES AND BATT NEEDED
-        priorityRows = []
+    # ***** FIND LEAVETIMES AND BATT NEEDED AND APPEND TO A LIST *****
+    for cars in range(0, len(depot)):
+        car = depot[cars]
 
-        # ***** FIND LEAVETIMES AND BATT NEEDED AND APPEND TO A LIST *****
-        for cars in range(0, len(depot)):
-            car = depot[cars]
+        # READ INDEX OF LATEST SHIFT AND INDEX OF THE LAST SHIFT
+        shiftIndex = carDataDF.loc[car, 'shiftIndex']
+        lastShiftIndex = len(shiftsByCar[str(car)])
+        # IF NEXT SHIFT EXISTS, TAKE START TIME OF NEXT SHIFT
+        if (shiftIndex + 1) < lastShiftIndex:
+            nextStart = shiftsByCar[str(car)].loc[shiftIndex+1, 'startShift']
 
-            # READ INDEX OF LATEST SHIFT AND INDEX OF THE LAST SHIFT
-            shiftIndex = carDataDF.loc[car, 'shiftIndex']
-            lastShiftIndex = len(shiftsByCar[str(car)])
-            # IF NEXT SHIFT EXISTS, TAKE START TIME OF NEXT SHIFT
-            if (shiftIndex + 1) < lastShiftIndex:
-                nextStart = shiftsByCar[str(car)].loc[shiftIndex+1, 'startShift']
+        # IF SHIFT INDEX GOES BEYOND LAST SHIFT, TAKE ARBITRARY LEAVETIME
+        else:
+            lastStart = shiftsByCar[str(car)].loc[lastShiftIndex-1, 'startShift']
+            lastDay = readTime(lastStart).date() + dt.timedelta(days=1)
+            nextStart = readTime(str(lastDay) + " 23:59:59")
 
-            # IF SHIFT INDEX GOES BEYOND LAST SHIFT, TAKE ARBITRARY LEAVETIME
-            else:
-                lastStart = shiftsByCar[str(car)].loc[lastShiftIndex-1, 'startShift']
-                lastDay = readTime(lastStart).date() + dt.timedelta(days=1)
-                nextStart = readTime(str(lastDay) + " 23:59:59")
+        # CALCULATE TIME LEFT AND BATT NEEDED
+        hrsLeft = ((rereadTime(nextStart) - rereadTime(time)).total_seconds())/(60*60)
+        battLeft = carDataDF.loc[car,'battSize']-carDataDF.loc[car,'battkW']
 
-            # CALCULATE TIME LEFT AND BATT NEEDED
-            hrsLeft = ((rereadTime(nextStart) - rereadTime(time)).total_seconds())/(60*60)
-            battLeft = carDataDF.loc[car,'battSize']-carDataDF.loc[car,'battkW']
+        # LET PRIORITY = BATT LEFT/TIME LEFT, APPEND TO LIST
+        priorityRows.append([car, battLeft/hrsLeft, battLeft])
 
-            # LET PRIORITY = BATT LEFT/TIME LEFT, APPEND TO LIST
-            priorityRows.append([car, battLeft/hrsLeft, battLeft])
+    # ***** CONVERT LIST INTO DATAFRAME AND SORT BY PRIORITY *****
+    leaveTimes = pd.DataFrame.from_records(priorityRows, columns=['car','priority','battLeft'])
+    leaveTimes = leaveTimes.sort_values(by=['priority'], ascending=False)
+    leaveTimes = leaveTimes.reset_index(drop=True)
 
-        # ***** CONVERT LIST INTO DATAFRAME AND SORT BY PRIORITY *****
-        leaveTimes = pd.DataFrame.from_records(priorityRows, columns=['car','priority','battLeft'])
-        leaveTimes = leaveTimes.sort_values(by=['priority'], ascending=False)
-        leaveTimes = leaveTimes.reset_index(drop=True)
+    # ***** IN SORTED ORDER, CALCULATE PRIORITY RATIO AND CHARGE *****
+    # CALCULATE THE SUM OF PRIORITY VALUES
+    prioritySum = sum(leaveTimes.priority)
 
-        # ***** IN SORTED ORDER, CALCULATE PRIORITY RATIO AND CHARGE *****
-        # CALCULATE THE SUM OF PRIORITY VALUES
-        prioritySum = sum(leaveTimes.priority)
+    # FOR EVERY CAR:
+    for row in range(0, len(leaveTimes)):
+        # READ IN DATA FOR SELECTED CAR
+        car = leaveTimes.loc[row, 'car']
+        batt = carDataDF.loc[car, 'battkW']
+        battSize = carDataDF.loc[car, 'battSize']
+        battLeft = leaveTimes.loc[row, 'battLeft']
+        priority = leaveTimes.loc[row, 'priority']
 
-        # FOR EVERY CAR:
-        for row in range(0, len(leaveTimes)):
-            # READ IN DATA FOR SELECTED CAR
-            car = leaveTimes.loc[row, 'car']
-            batt = carDataDF.loc[car, 'battkW']
-            battSize = carDataDF.loc[car, 'battSize']
-            battLeft = leaveTimes.loc[row, 'battLeft']
-            priority = leaveTimes.loc[row, 'priority']
+        # IF CAR BATT IS NOT 100%, CHARGE CAR
+        if batt < battSize:
+            # ALLOCATE CHARGE PT IF CAR DOESN'T HAVE ONE
+            pt, carDataDF, chargePtDF = findChargePt(carDataDF, car, chargePtDF)
+            chargeRate = 0
 
-            # IF CAR BATT IS NOT 100%, CHARGE CAR
-            if batt < battSize:
-                # ALLOCATE CHARGE PT IF CAR DOESN'T HAVE ONE
-                pt, carDataDF, chargePtDF = findChargePt(carDataDF, car, chargePtDF)
-                chargeRate = 0
+            # IF CAR HAS A VALID CHARGE PT
+            if not np.isnan(pt):
+                # READ MAX RATE
+                maxRate = chargePtDF.loc[pt, 'maxRate']
 
-                # IF CAR HAS A VALID CHARGE PT
-                if not np.isnan(pt):
-                    # READ MAX RATE
-                    maxRate = chargePtDF.loc[pt, 'maxRate']
+                # CALCULATE CHARGE RATE USING PRIORITY/SUM OF PRIORITIES
+                chargeRate = (priority/prioritySum)*availablePower
 
-                    # CALCULATE CHARGE RATE USING PRIORITY/SUM OF PRIORITIES
-                    chargeRate = (priority/prioritySum)*availablePower
+                # IF CHARGE RATE EXCEEDS MAX RATE:
+                if chargeRate > maxRate: chargeRate = maxRate
+                # IF CHARGE RATE EXCEEDS CHARGE NEEDED:
+                if chargeRate > battLeft*chunks: chargeRate = battLeft*chunks
 
-                    # IF CHARGE RATE EXCEEDS MAX RATE:
-                    if chargeRate > maxRate: chargeRate = maxRate
-                    # IF CHARGE RATE EXCEEDS CHARGE NEEDED:
-                    if chargeRate > battLeft*chunks: chargeRate = battLeft*chunks
+            # ADJUST REMAINING AVAILABLE POWER AND PRIORITY SUM
+            availablePower -= chargeRate
+            prioritySum -= priority
 
-                # ADJUST REMAINING AVAILABLE POWER AND PRIORITY SUM
-                availablePower -= chargeRate
-                prioritySum -= priority
-
-                # ADJUST TO-CHARGE DF WITH CHARGE RATE
-                toChargeDF.loc[car, 'chargeRate'] = chargeRate
+            # ADJUST TO-CHARGE DF WITH CHARGE RATE
+            toChargeDF.loc[car, 'chargeRate'] = chargeRate
 
     return carDataDF, chargePtDF, toChargeDF, totalCost
 
@@ -298,114 +287,111 @@ def smartCharge_battOverLeavetime(carDataDF, depot, shiftsByCar, time,
 # IF CAR WILL CHARGE OVER GREEN ZONE:
     # DELAY CHARGING UNTIL START GREEN ZONE STARTS (PRIORITY = 0)
 # CHARGE RATE = (PRIORITY/SUM OF ALL PRIORITIES)*AVAILABLE POWER
-def costSensitiveCharge(carDataDF, depot, shiftsByCar, time,
+def costSensitiveCharge(time, carDataDF, depot, shiftsByCar,
                         availablePower, simulationDF, chargePtDF, toChargeDF,
                         pricesDF, company, totalCost):
-    # IF THERE ARE CARS IN THE DEPOT
-    if len(depot) >= 1:
+    # CREATE A LIST FOR CARS AND THEIR LEAVETIME AND BATT NEEDED
+    priorityRows = []
 
-        # CREATE A LIST FOR CARS AND THEIR LEAVETIME AND BATT NEEDED
-        priorityRows = []
+    # ***** CALCULATE PRIORITY FOR EACH CAR AND APPEND TO A LIST *****
+    for cars in range(0, len(depot)):
+        carNum = depot[cars]
 
-        # ***** CALCULATE PRIORITY FOR EACH CAR AND APPEND TO A LIST *****
-        for cars in range(0, len(depot)):
-            carNum = depot[cars]
+        # READ INDEX OF LATEST SHIFT AND INDEX OF THE LAST SHIFT
+        shiftIndex = carDataDF.loc[carNum, 'shiftIndex']
+        lastShiftIndex = len(shiftsByCar[str(carNum)])
+        # IF NEXT SHIFT EXISTS, TAKE START TIME OF NEXT SHIFT
+        if (shiftIndex + 1) < lastShiftIndex:
+            nextStart = readTime(shiftsByCar[str(carNum)].loc[shiftIndex+1, 'startShift'])
 
-            # READ INDEX OF LATEST SHIFT AND INDEX OF THE LAST SHIFT
-            shiftIndex = carDataDF.loc[carNum, 'shiftIndex']
-            lastShiftIndex = len(shiftsByCar[str(carNum)])
-            # IF NEXT SHIFT EXISTS, TAKE START TIME OF NEXT SHIFT
-            if (shiftIndex + 1) < lastShiftIndex:
-                nextStart = readTime(shiftsByCar[str(carNum)].loc[shiftIndex+1, 'startShift'])
+        # IF SHIFT INDEX GOES BEYOND LAST SHIFT, TAKE ARBITRARY LEAVETIME
+        else:
+            lastStart = shiftsByCar[str(carNum)].loc[lastShiftIndex-1, 'startShift']
+            lastDay = readTime(lastStart).date() + dt.timedelta(days=1)
+            nextStart = readTime(str(lastDay) + " 23:59:59")
 
-            # IF SHIFT INDEX GOES BEYOND LAST SHIFT, TAKE ARBITRARY LEAVETIME
-            else:
-                lastStart = shiftsByCar[str(carNum)].loc[lastShiftIndex-1, 'startShift']
-                lastDay = readTime(lastStart).date() + dt.timedelta(days=1)
-                nextStart = readTime(str(lastDay) + " 23:59:59")
+        # CALCULATE TIME LEFT AND BATT NEEDED
+        hrsLeft = ((rereadTime(nextStart) - rereadTime(time)).total_seconds())/(60*60)
+        battLeft = carDataDF.loc[carNum,'battSize']-carDataDF.loc[carNum,'battkW']
+        prior = battLeft/hrsLeft
 
-            # CALCULATE TIME LEFT AND BATT NEEDED
-            hrsLeft = ((rereadTime(nextStart) - rereadTime(time)).total_seconds())/(60*60)
-            battLeft = carDataDF.loc[carNum,'battSize']-carDataDF.loc[carNum,'battkW']
-            prior = battLeft/hrsLeft
+        # ***** DELAY CHARGING FOR CARS THAT ARE IN DEPOT DURING THE GREEN ZONE *****
+        # READ IN START AND END TIMES OF GREEN ZONE
+        greenStartHr = pricesDF.loc[pricesDF['company']==company, 'startGreenZone'].to_string(index=False)[1:]
+        greenEndHr = pricesDF.loc[pricesDF['company']==company, 'endGreenZone'].to_string(index=False)[1:]
 
-            # ***** DELAY CHARGING FOR CARS THAT ARE IN DEPOT DURING THE GREEN ZONE *****
-            # READ IN START AND END TIMES OF GREEN ZONE
-            greenStartHr = pricesDF.loc[pricesDF['company']==company, 'startGreenZone'].to_string(index=False)[1:]
-            greenEndHr = pricesDF.loc[pricesDF['company']==company, 'endGreenZone'].to_string(index=False)[1:]
+        # IF GREEN ZONE RUNS OVERNIGHT:
+        if (readTime(greenStartHr) > readTime(greenEndHr)):
+            # GREEN START = CURRENT DAY + GREEN ZONE START TIME
+            greenStart = readTime(str(time.date()) + " " + greenStartHr)
+            # GREEN END = NEXT DAY + GREEN END TIME
+            greenEnd = readTime(str(time.date() + dt.timedelta(days=1)) + " " + greenEndHr)
 
-            # IF GREEN ZONE RUNS OVERNIGHT:
-            if (readTime(greenStartHr) > readTime(greenEndHr)):
-                # GREEN START = CURRENT DAY + GREEN ZONE START TIME
-                greenStart = readTime(str(time.date()) + " " + greenStartHr)
-                # GREEN END = NEXT DAY + GREEN END TIME
-                greenEnd = readTime(str(time.date() + dt.timedelta(days=1)) + " " + greenEndHr)
+        # IF GREEN ZONE DOESN'T RUN OVERNIGHT, CONSIDER CASE WHERE TIME IS PAST MIDNIGHT
+        else:
+            # CALCULATE DIFFERENCE GREEN ZONE START TIME AND MIDNIGHT
+            arbGreenStart = dt.datetime.combine(dt.date.today(), readTime(greenStartHr))
+            arbMidnight = dt.datetime.combine(dt.date.today(), readTime("00:00:00"))
+            gap = arbGreenStart - arbMidnight
 
-            # IF GREEN ZONE DOESN'T RUN OVERNIGHT, CONSIDER CASE WHERE TIME IS PAST MIDNIGHT
-            else:
-                # CALCULATE DIFFERENCE GREEN ZONE START TIME AND MIDNIGHT
-                arbGreenStart = dt.datetime.combine(dt.date.today(), readTime(greenStartHr))
-                arbMidnight = dt.datetime.combine(dt.date.today(), readTime("00:00:00"))
-                gap = arbGreenStart - arbMidnight
+            # GREEN START = (TIME-GAP) + 1 DAY + GREEN ZONE START TIME
+            greenStart = readTime(str((time-gap).date() + dt.timedelta(days=1)) + " " + greenStartHr)
+            # GREEN END = (TIME-GAP) + 1 DAY + GREEN ZONE END TIME
+            greenEnd = readTime(str((time-gap).date() + dt.timedelta(days=1)) + " " + greenEndHr)
 
-                # GREEN START = (TIME-GAP) + 1 DAY + GREEN ZONE START TIME
-                greenStart = readTime(str((time-gap).date() + dt.timedelta(days=1)) + " " + greenStartHr)
-                # GREEN END = (TIME-GAP) + 1 DAY + GREEN ZONE END TIME
-                greenEnd = readTime(str((time-gap).date() + dt.timedelta(days=1)) + " " + greenEndHr)
+        # IF GREEN ZONE HASN'T STARTED YET,
+        # AND IF CAR WILL BE CHARGING THROUGHOUT WHOLE OF GREEN ZONE:
+        if (time < greenStart) and (nextStart >= greenEnd):
+            # DELAY CHARGING UNTIL GREEN ZONE
+            prior = 0.0
 
-            # IF GREEN ZONE HASN'T STARTED YET,
-            # AND IF CAR WILL BE CHARGING THROUGHOUT WHOLE OF GREEN ZONE:
-            if (time < greenStart) and (nextStart >= greenEnd):
-                # DELAY CHARGING UNTIL GREEN ZONE
-                prior = 0.0
+        # LET PRIORITY = BATTLEFT/TIME LEFT, APPEND TO LIST
+        priorityRows.append([carNum, prior, battLeft])
 
-            # LET PRIORITY = BATTLEFT/TIME LEFT, APPEND TO LIST
-            priorityRows.append([carNum, prior, battLeft])
+    # ***** CONVERT LIST INTO DATAFRAME AND SORT BY PRIORITY *****
+    leaveTimes = pd.DataFrame.from_records(priorityRows, columns=['car','priority','battLeft'])
+    leaveTimes = leaveTimes.sort_values(by=['priority'], ascending=False)
+    leaveTimes = leaveTimes.reset_index(drop=True)
 
-        # ***** CONVERT LIST INTO DATAFRAME AND SORT BY PRIORITY *****
-        leaveTimes = pd.DataFrame.from_records(priorityRows, columns=['car','priority','battLeft'])
-        leaveTimes = leaveTimes.sort_values(by=['priority'], ascending=False)
-        leaveTimes = leaveTimes.reset_index(drop=True)
+    # ***** IN SORTED ORDER, CALCULATE PRIORITY RATIO AND CHARGE *****
+    # CALCULATE THE SUM OF PRIORITY VALUES
+    prioritySum = sum(leaveTimes.priority)
 
-        # ***** IN SORTED ORDER, CALCULATE PRIORITY RATIO AND CHARGE *****
-        # CALCULATE THE SUM OF PRIORITY VALUES
-        prioritySum = sum(leaveTimes.priority)
+    # FOR EVERY CAR:
+    for row in range(0, len(leaveTimes)):
+        # READ IN DATA FOR SELECTED CAR
+        car = leaveTimes.loc[row, 'car']
+        batt = carDataDF.loc[car, 'battkW']
+        battSize = carDataDF.loc[car, 'battSize']
+        battLeft = leaveTimes.loc[row, 'battLeft']
+        priority = leaveTimes.loc[row, 'priority']
 
-        # FOR EVERY CAR:
-        for row in range(0, len(leaveTimes)):
-            # READ IN DATA FOR SELECTED CAR
-            car = leaveTimes.loc[row, 'car']
-            batt = carDataDF.loc[car, 'battkW']
-            battSize = carDataDF.loc[car, 'battSize']
-            battLeft = leaveTimes.loc[row, 'battLeft']
-            priority = leaveTimes.loc[row, 'priority']
+        # IF CAR BATT IS NOT 100%, CHARGE CAR
+        if batt < battSize:
+            # ALLOCATE CHARGE PT IF CAR DOESN'T HAVE ONE
+            pt, carDataDF, chargePtDF = findChargePt(carDataDF, car, chargePtDF)
+            chargeRate = 0
 
-            # IF CAR BATT IS NOT 100%, CHARGE CAR
-            if batt < battSize:
-                # ALLOCATE CHARGE PT IF CAR DOESN'T HAVE ONE
-                pt, carDataDF, chargePtDF = findChargePt(carDataDF, car, chargePtDF)
-                chargeRate = 0
+            # IF CAR HAS A VALID CHARGE PT
+            if not np.isnan(pt):
+                # READ MAX RATE
+                maxRate = chargePtDF.loc[pt, 'maxRate']
 
-                # IF CAR HAS A VALID CHARGE PT
-                if not np.isnan(pt):
-                    # READ MAX RATE
-                    maxRate = chargePtDF.loc[pt, 'maxRate']
+                # CALCULATE CHARGE RATE USING PRIORITY/SUM OF PRIORITIES
+                if prioritySum == 0.0: chargeRate = 0
+                else:                  chargeRate = (priority/prioritySum)*availablePower
 
-                    # CALCULATE CHARGE RATE USING PRIORITY/SUM OF PRIORITIES
-                    if prioritySum == 0.0: chargeRate = 0
-                    else:                  chargeRate = (priority/prioritySum)*availablePower
+                # IF CHARGE RATE EXCEEDS MAX RATE:
+                if chargeRate > maxRate: chargeRate = maxRate
+                # IF CHARGE RATE EXCEEDS CHARGE NEEDED:
+                if chargeRate > battLeft*chunks: chargeRate = battLeft*chunks
 
-                    # IF CHARGE RATE EXCEEDS MAX RATE:
-                    if chargeRate > maxRate: chargeRate = maxRate
-                    # IF CHARGE RATE EXCEEDS CHARGE NEEDED:
-                    if chargeRate > battLeft*chunks: chargeRate = battLeft*chunks
+            # ADJUST REMAINING CHARGE CAPACITY AND PRIORITY SUM
+            availablePower -= chargeRate
+            prioritySum -= priority
 
-                # ADJUST REMAINING CHARGE CAPACITY AND PRIORITY SUM
-                availablePower -= chargeRate
-                prioritySum -= priority
-
-                # ADJUST TO-CHARGE DF WITH CHARGE RATE
-                toChargeDF.loc[car, 'chargeRate'] = chargeRate
+            # ADJUST TO-CHARGE DF WITH CHARGE RATE
+            toChargeDF.loc[car, 'chargeRate'] = chargeRate
 
     return carDataDF, chargePtDF, toChargeDF, totalCost
 
@@ -414,7 +400,7 @@ def costSensitiveCharge(carDataDF, depot, shiftsByCar, time,
 ############################################
 # RUN SIMULATION FROM SEPARATE FILE
 ############################################
-def runSimulation(startTime, runTime, RCduration, RCperc,
+def runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
                   fleetData, driveDataDF, allShiftsDF, pricesDF, company,
                   algo):
 
@@ -468,21 +454,28 @@ def runSimulation(startTime, runTime, RCduration, RCperc,
         eventChange = False
 
         # *** RUN FUNCTIONS THAT INCLUDE WILL RECOGNISE CHANGES IN EVENTS ***
-        carDataDF, depot, chargePtDF, toChargeDF, eventChange = inOutDepot(carDataDF, shiftsByCar, time, depot, chargePtDF, toChargeDF, eventChange)
-        toChargeDF, eventChange = readFullBattCars(carDataDF, simulationDF, toChargeDF, time, totalCost, eventChange)
+        eventChange, carDataDF, depot, chargePtDF, toChargeDF = inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, toChargeDF, eventChange)
+        eventChange, toChargeDF = readFullBattCars(time, carDataDF, simulationDF, toChargeDF, totalCost, eventChange)
         eventChange = readTariffChanges(time, pricesDF, company, eventChange)
 
         # *** RUN FUNCTIONS AFFECTING CARS OUTSIDE THE DEPOT ***
         # DECREASE BATT/RAPID CHARGE CARS OUTSIDE THE DEPOT
-        carDataDF, rcCount, simulationDF, totalCost = driving(carDataDF, time, rcCount, RCduration, RCperc, simulationDF, driveDataByCar, i, totalCost)
+        carDataDF, rcCount, simulationDF, totalCost = driving(time, carDataDF, driveDataByCar, 
+                                                            rcCount, rcDuration, rcPerc, rcRate, 
+                                                            simulationDF, i, totalCost)
 
         # *** RUN FUNCTIONS AFFECTING CARS IN THE DEPOT ***
-        # IF THERE IS AN EVENT, RUN CHARGING ALGORITHM
-        if eventChange == True:
-            carDataDF, chargePtDF, toChargeDF, totalCost = algo(carDataDF, depot, shiftsByCar, time, availablePower, simulationDF, chargePtDF, toChargeDF, pricesDF, company, totalCost)
+        # IF THERE IS AN EVENT and THERE ARE CARS THAT REQUIRE CHARGING
+        # RUN CHARGING ALGORITHM
+        if (eventChange == True) and (len(depot) > 0):
+            carDataDF, chargePtDF, toChargeDF, totalCost = algo(time, carDataDF, depot, shiftsByCar, 
+                                                    availablePower, simulationDF, chargePtDF, toChargeDF, 
+                                                    pricesDF, company, totalCost)
 
         # CHARGE/READ WAITING CARS IN THE DEPOT
-        carDataDF, simulationDF, chargePtDF, totalCost = charge(carDataDF, depot, simulationDF, time, chargePtDF, toChargeDF, pricesDF, company, totalCost)
+        carDataDF, simulationDF, chargePtDF, totalCost = charge(time, carDataDF, depot, 
+                                                simulationDF, chargePtDF, toChargeDF, 
+                                                pricesDF, company, totalCost)
 
         # FORMAT TOTAL COST COLUMN IN SIMULATION DF
         simulationDF = adjustTotalCost(time, simulationDF)

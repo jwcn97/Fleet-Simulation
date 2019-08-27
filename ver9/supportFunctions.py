@@ -30,14 +30,6 @@ def incrementTime(ti):
 # MISC FUNCTIONS
 ##############################
 
-# SELECT FLEET DATA IN EXECUTION FILE BASED ON:
-    # number of cars
-    # battery size
-    # number of fast charge points
-def selectCase(df, params):
-    for key in params: df = df.loc[df[key] == params[key]]
-    return df
-
 # RETRIEVES COLUMN DATA FROM DATAFRAME
 def getData(df, col):
     return df[col].values[0]
@@ -45,19 +37,19 @@ def getData(df, col):
 # GENERATE CAR DATA AND CHARGE POINT DATA
 def getLists(df):
     # initialise charge points data
-    slow_cps = getData(df, 'slowChargePts')
-    fast_cps = getData(df, 'fastChargePts')
-    rapid_cps = getData(df, 'rapidChargePts')
-    chargePts = slow_cps + fast_cps + rapid_cps
-    chargePt_data = ([[22,1]]*rapid_cps + [[7,1]]*fast_cps + [[3,1]]*slow_cps)
+    chargePt_data = []
+    for (rate,quantity) in eval(getData(df, 'chargePts')):
+        # [maxRate, inUse]
+        chargePt_data += [[rate,1]]*quantity
 
     # initialise car data
-    smallCars = getData(df, 'smallCars')
-    mediumCars = getData(df, 'mediumCars')
-    largeCars = getData(df, 'largeCars')
-    car_data = [[30, 1, 30, np.nan, -1, np.nan, np.nan]]*smallCars + [[40, 1, 40, np.nan, -1, np.nan, np.nan]]*mediumCars + [[70, 1, 70, np.nan, -1, np.nan,np.nan]]*largeCars
+    car_data = []
+    for (size,quantity) in eval(getData(df, 'cars')):
+        # [battkW, inDepot, battSize, chargePt, shiftIndex, latestStartShift, latestEndShift]
+        car_data += [[size,1,size,np.nan,-1,np.nan,np.nan]]*quantity
+    
     # assign available charge points to cars
-    for cp_id in range(chargePts):
+    for cp_id in range(len(chargePt_data)):
         size = car_data[cp_id][0]
         car_data[cp_id] = [size,1,size,cp_id,-1,np.nan,np.nan]
 
@@ -140,7 +132,7 @@ def unpackShifts(carData, allShiftsDF):
     # Enter depot
     # Let inDepot = 1 in carDataDF
 
-def inOutDepot(carDataDF, shiftsByCar, time, depot, chargePtDF, toChargeDF, eventChange):
+def inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, toChargeDF, eventChange):
     # FOR EVERY CAR:
     for car in range(0, len(carDataDF)):
 
@@ -173,9 +165,7 @@ def inOutDepot(carDataDF, shiftsByCar, time, depot, chargePtDF, toChargeDF, even
 
                 # REMOVE CHARGE PT IN CHARGE PT DF
                 pt = carDataDF.loc[car,'chargePt']
-                if not np.isnan(pt):
-                    chargePtDF.loc[pt,'inUse'] = np.nan
-                    # print("remove charge point "+str(pt))
+                chargePtDF.loc[pt,'inUse'] = np.nan
 
                 # REMOVE CHARGE PT IN CAR DATA DF
                 carDataDF.loc[car,'chargePt'] = np.nan
@@ -191,12 +181,12 @@ def inOutDepot(carDataDF, shiftsByCar, time, depot, chargePtDF, toChargeDF, even
                 # RECOGNISE AN EVENT HAS HAPPENED
                 eventChange = True
 
-    return carDataDF, depot, chargePtDF, toChargeDF, eventChange
+    return eventChange, carDataDF, depot, chargePtDF, toChargeDF
 
 ################################################
 # READ CARS WITH FULL BATTERY INTO SIMULATION DF
 ################################################
-def readFullBattCars(carDataDF, simulationDF, toChargeDF, time, totalCost, eventChange):
+def readFullBattCars(time, carDataDF, simulationDF, toChargeDF, totalCost, eventChange):
     # SELECT VEHICLES IN THE DEPOT WITH FULL BATTERY
     chargeDF = carDataDF.loc[carDataDF['inDepot'] == 1]
     fullBattDF = chargeDF.loc[chargeDF['battkW'] == chargeDF['battSize']]
@@ -222,7 +212,7 @@ def readFullBattCars(carDataDF, simulationDF, toChargeDF, time, totalCost, event
             # RECOGNISE AN EVENT HAS HAPPENED
             eventChange = True
 
-    return toChargeDF, eventChange
+    return eventChange, toChargeDF
 
 ################################################
 # READ TARIFF CHANGES
@@ -248,7 +238,9 @@ def readTariffChanges(time, pricesDF, company, eventChange):
 # FOR CARS THAT NEED RAPID CHARGING: RAPID CHARGE
 # FOR CARS THAT DON'T NEED RAPID CHARGING: DECREASE BATT
 ###############################
-def driving(carDataDF, time, rcCount, RCduration, RCperc, simulationDF, driveDataByCar, ind, totalCost):
+def driving(time, carDataDF, driveDataByCar, 
+            rcCount, rcDuration, rcPerc, rcRate, 
+            simulationDF, ind, totalCost):
     # FIND CARS OUTSIDE OF DEPOT
     drivingCarsDF = carDataDF.loc[carDataDF["inDepot"]==0]
 
@@ -265,7 +257,7 @@ def driving(carDataDF, time, rcCount, RCduration, RCperc, simulationDF, driveDat
         car = drivingCarsDF.index[row]
 
         # FIND DURATION OF RAPID CHARGE IN CHUNKS
-        RCchunks = np.ceil(chunks/(60/RCduration))
+        RCchunks = np.ceil(chunks/(60/rcDuration))
 
         # PREPARE BASE CASE FOR WHILE LOOP
         chunkCount = 1
@@ -274,7 +266,7 @@ def driving(carDataDF, time, rcCount, RCduration, RCperc, simulationDF, driveDat
         checkEvent = prevSimChunk.loc[prevSimChunk['car']==car, 'event'].to_string(index=False)
 
         # CHECK IF CAR HAS BEEN RAPID CHARGING
-        while checkEvent == "RC":
+        while checkEvent == " RC":
             chunkCount += 1
             checkTime = str(time - ((dt.timedelta(hours=1/chunks))*chunkCount))
             prevSimChunk = simulationDF.loc[simulationDF['time']==checkTime]
@@ -290,7 +282,7 @@ def driving(carDataDF, time, rcCount, RCduration, RCperc, simulationDF, driveDat
             # IF BATTERY < RC PERCENTAGE (INPUT), CAR NEEDS RAPID CHARGING
             batt = carDataDF.loc[car, 'battkW']
             battSize = carDataDF.loc[car, 'battSize']
-            if batt < (battSize*(RCperc/100)):
+            if batt < (battSize*(rcPerc/100)):
                 # APPEND TO RAPID CHARGE LIST
                 toRapidCharge.append(car)
                 # INCREASE RAPID CHARGE COUNT
@@ -300,6 +292,7 @@ def driving(carDataDF, time, rcCount, RCduration, RCperc, simulationDF, driveDat
             else: dontRapidCharge.append(car)
 
     # ***** FOR CARS THAT DON'T NEED RAPID CHARGING, DECREASE BATT (DRIVE) *****
+    drivingValues = driveDataByCar['0'].shape[0]
     for carsDontRC in range(len(dontRapidCharge)):
         car = dontRapidCharge[carsDontRC]
 
@@ -307,8 +300,8 @@ def driving(carDataDF, time, rcCount, RCduration, RCperc, simulationDF, driveDat
         batt = carDataDF.loc[car, 'battkW']
 
         # GET RANDOMISED VALUE FOR MILEAGE AND MPKW
-        mileage = driveDataByCar[str(car)].loc[ind, 'mileage']
-        mpkw = driveDataByCar[str(car)].loc[ind, 'mpkw']
+        mileage = driveDataByCar[str(car)].loc[ind % drivingValues, 'mileage']
+        mpkw = driveDataByCar[str(car)].loc[ind % drivingValues, 'mpkw']
 
         # CALCULATE RATE OF BATT DECREASE
         kwphr = mileage/mpkw
@@ -339,10 +332,11 @@ def driving(carDataDF, time, rcCount, RCduration, RCperc, simulationDF, driveDat
         battSize = carDataDF.loc[car, 'battSize']
 
         # CALCULATE BATTERY INCREASE
-        RCbattIncrease = 50/chunks
+        if batt + rcRate/chunks > battSize: RCbattIncrease = battSize - batt
+        else:                               RCbattIncrease = rcRate/chunks
 
         # UPDATE RAPID CHARGE COUNT AND TOTAL COST
-        RCcost = 0.3*(50/chunks)
+        RCcost = 0.3*(RCbattIncrease)
         totalCost += RCcost
 
         # UPDATE SIMULATION ACCORDINGLY
@@ -352,15 +346,12 @@ def driving(carDataDF, time, rcCount, RCduration, RCperc, simulationDF, driveDat
             'chargeDiff': round(RCbattIncrease, 1),
             'batt': round(batt, 1),
             'event': 'RC',
-            'costPerCharge': RCcost,
+            'costPerCharge': round(RCcost, 2),
             'totalCost': round(totalCost, 2)
         }, ignore_index=True)
 
-        # RAPID CHARGE
+        # RAPID CHARGE and ASSIGN BATTERY
         batt += RCbattIncrease
-        if  batt > battSize: batt = battSize
-
-        # ASSIGN BATTERY
         carDataDF.loc[car,'battkW'] = batt
 
     return carDataDF, rcCount, simulationDF, totalCost
@@ -392,7 +383,9 @@ def findChargePt(carDataDF, car, chargePtDF):
 ###################################
 # CHARGE VEHICLE FOR ONE HOUR
 ###################################
-def charge(carDataDF, depot, simulationDF, time, chargePtDF, toChargeDF, pricesDF, company, totalCost):
+def charge(time, carDataDF, depot, 
+            simulationDF, chargePtDF, toChargeDF, 
+            pricesDF, company, totalCost):
     # FOR EVERY CAR IN THE DEPOT
     for index in range(len(depot)):
         car = depot[index]

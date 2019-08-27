@@ -23,8 +23,8 @@ def eventBackground(val):
     else: color = None
     return 'background-color: %s' % color
 
-def styleDF(df,col):
-    DF = df.set_index(['time','totalCost',col])
+def styleDF(df):
+    DF = df.set_index(['time','totalCost','car'])
     DF = DF.T.stack().T
     DF = DF.style.\
         applymap(crColour, subset=['chargeDiff']).\

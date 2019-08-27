@@ -17,33 +17,34 @@ allShiftsDF = pd.read_csv("csv/schedules/" + schedule + ".csv", sep=";", index_c
 drivingDF = pd.read_csv("csv/driving/" + mpkw + ".csv", sep=";", index_col=None)
 pricesDF = pd.read_csv("csv/prices.csv", sep=";", index_col=None)
 fleetDF = pd.read_csv("csv/fleetData.csv", sep=";", index_col=None)
-fleetData = selectCase(fleetDF, {'smallCars':4,'fastChargePts':4})
+fleetData = fleetDF.loc[fleetDF.index == 0]
 
 # SELECT RAPID CHARGE INFORMATION
-RCduration = 30     # RAPID CHARGE DURATION (MINUTES)
-RCperc = 20         # WHAT PERCENTAGE TO START RAPID CHARGING (%)
+rcDuration = 30     # RAPID CHARGE DURATION (MINUTES)
+rcPerc = 20         # WHAT PERCENTAGE TO START RAPID CHARGING (%)
+rcRate = 50         # RATE OF RAPID CHARGING (KW/HR)
 
 # CHOOSE START TIME AND RUN TIME
 startTime = readTime("2019-01-01 06:00:00")
 runTime = 24*5
 
-# dumb_sim, dumbRC = runSimulation(startTime, runTime, RCduration, RCperc,
+# dumb_sim, dumbRC = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
 #                         fleetData, drivingDF, allShiftsDF, pricesDF, company,
 #                         dumbCharge)
 
-# smart_leavetime_sim, smart_leavetimeRC = runSimulation(startTime, runTime, RCduration, RCperc,
+# smart_leavetime_sim, smart_leavetimeRC = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
 #                         fleetData, drivingDF, allShiftsDF, pricesDF, company,
 #                         smartCharge_leavetime)
 
-# smart_batt_sim, smart_battRC = runSimulation(startTime, runTime, RCduration, RCperc,
+# smart_batt_sim, smart_battRC = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
 #                         fleetData, drivingDF, allShiftsDF, pricesDF, company,
 #                         smartCharge_batt)
 
-# smart_sim, smartRC = runSimulation(startTime, runTime, RCduration, RCperc,
+# smart_sim, smartRC = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
 #                         fleetData, drivingDF, allShiftsDF, pricesDF, company,
 #                         smartCharge_battOverLeavetime)
 
-cost_sim, costRC = runSimulation(startTime, runTime, RCduration, RCperc,
+cost_sim, costRC = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
                         fleetData, drivingDF, allShiftsDF, pricesDF, company,
                         costSensitiveCharge)
 
