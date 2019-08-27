@@ -44,9 +44,11 @@ runTime = 24*5
 #                         fleetData, drivingDF, allShiftsDF, pricesDF, company,
 #                         smartCharge_battOverLeavetime)
 
+time_ = dt.datetime.now()
 cost_sim, costRC = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
                         fleetData, drivingDF, allShiftsDF, pricesDF, company,
                         costSensitiveCharge)
+print((dt.datetime.now()-time_).total_seconds())
 
 # total_cars = 4
 # total_algos = 5

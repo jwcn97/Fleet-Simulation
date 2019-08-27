@@ -430,7 +430,6 @@ def charge(time, carDataDF, depot,
             'costPerCharge': round(costOfCharge, 1) if chargeRate > 0 else 0,
             'totalCost': round(totalCost, 2)
         }, ignore_index=True)
-        # print("CHARGE")
 
         # INCREASE BATTERY PERCENTAGE ACCORDING TO CHARGE RATE
         batt += chargeRate/chunks
