@@ -393,7 +393,7 @@ def runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
 
         # *** RUN FUNCTIONS THAT INCLUDE WILL RECOGNISE CHANGES IN EVENTS ***
         eventChange, carDataDF, depot, chargePtDF = inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, eventChange)
-        eventChange = readFullBattCars(time, carDataDF, simulationDF, totalCost, eventChange)
+        eventChange, carDataDF = readFullBattCars(time, carDataDF, simulationDF, totalCost, eventChange)
         eventChange = readTariffChanges(time, pricesDF, eventChange)
 
         # *** RUN FUNCTIONS AFFECTING CARS OUTSIDE THE DEPOT ***

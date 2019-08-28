@@ -18,8 +18,8 @@ runTime = 24*5
 # CHOOSE PARAMETERS
 outputFolder = "results_test/"
 company = "BritishGas"
-schedule = "shift2"
 mpkw = "HighMpkwLowSD"
+schedule = "shift1"
 hasBreak = 0
 fleetType = 0
 
@@ -38,7 +38,7 @@ dumbDF, dumbRC, dumbCost = runSimulation(startTime, runTime, rcDuration, rcPerc,
                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
                         dumbCharge)
 
-leavetimeDF, leavetimeRC, leavetimeCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+leaveTDF, leaveTRC, leaveTCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
                         smartCharge_leavetime)
 
@@ -60,18 +60,13 @@ print((dt.datetime.now()-time_).total_seconds())
 # NOTE: CREATE AN OUTPUT FOLDER FIRST
 ###############################################################
 # open writer
-writer = pd.ExcelWriter(outputFolder + "fleet" + str(fleetType) + "_case3.xlsx")
+writer = pd.ExcelWriter(outputFolder + "fleet" + str(fleetType) + "_case1.xlsx")
 # write files
-styleDF(dumbDF).to_excel(
-    writer, sheet_name="dumb")
-styleDF(leavetimeDF).to_excel(
-    writer, sheet_name="leavetime")
-styleDF(battDF).to_excel(
-    writer, sheet_name="batt")
-styleDF(smartDF).to_excel(
-    writer, sheet_name="smart")
-styleDF(costDF).to_excel(
-    writer, sheet_name="cost")
+styleDF(dumbDF).to_excel(writer, sheet_name="dumb")
+styleDF(leaveTDF).to_excel(writer, sheet_name="leavetime")
+styleDF(battDF).to_excel(writer, sheet_name="batt")
+styleDF(smartDF).to_excel(writer, sheet_name="smart")
+styleDF(costDF).to_excel(writer, sheet_name="cost")
 # close writer
 writer.save()
 
@@ -80,14 +75,14 @@ writer.save()
 
 # for car in range(total_cars):
 #     result = pd.concat([getCarDF(dumbDF, 'dumb', car),
-#                         getCarDF(leavetimeDF, 'leavetime', car),
+#                         getCarDF(leaveTDF, 'leavetime', car),
 #                         getCarDF(battDF, 'batt', car),
 #                         getCarDF(smartDF, 'smart', car),
 #                         getCarDF(costDF, 'cost', car)])
 #     compareAlgo(outputFolder, schedule + "_" + company + "_" + mpkw, result, car, total_algos, company)
 
 # compareCars(outputFolder, schedule + "_" + company + "_" + mpkw, dumbDF, 'dumb', total_cars, company)
-# compareCars(outputFolder, schedule + "_" + company + "_" + mpkw, leavetimeDF, 'leavetime', total_cars, company)
+# compareCars(outputFolder, schedule + "_" + company + "_" + mpkw, leaveTDF, 'leavetime', total_cars, company)
 # compareCars(outputFolder, schedule + "_" + company + "_" + mpkw, battDF, 'batt', total_cars, company)
 # compareCars(outputFolder, schedule + "_" + company + "_" + mpkw, smartDF, 'smart', total_cars, company)
 # compareCars(outputFolder, schedule + "_" + company + "_" + mpkw, costDF, 'cost', total_cars, company)

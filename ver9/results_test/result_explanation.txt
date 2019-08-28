@@ -1,8 +1,12 @@
-cases:
+company = "BritishGas"
+mpkw = "HighMpkwLowSD"
+rcPerc = 20%
+run on 15 min chunks
 
-0. base case -> 114.014411s
-1. base case with break -> 95.318645s
-2. base case with charging break -> 157.579718s
+cases:
+0. base case
+1. base case with break
+2. base case with charging break
 3. variations in base case
 4. variations in base case with break
 5. variations in base case with charging break

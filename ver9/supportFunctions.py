@@ -181,7 +181,7 @@ def unpackShifts(carData, allShiftsDF):
 def inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, eventChange):
     # FOR EVERY CAR:
     for car in range(0, len(carDataDF)):
-
+        
         # ***** CHECK IF CAR IS AT THE END OF A SHIFT *****
         # IF TIME == END TIME OF CURRENT SHIFT:
         if str(time) == carDataDF.loc[car, 'latestEndShift']:
@@ -216,11 +216,9 @@ def inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, eventChange):
                 # REMOVE CHARGE PT IN CAR DATA DF
                 carDataDF.loc[car,'chargePt'] = np.nan
 
-                # LET CHARGE RATE = 0 IN TO-CHARGE DF
+                # RESET RCCHUNKS COUNT and CHARGE RATE
+                carDataDF.loc[car,'rcChunks'] = 0
                 carDataDF.loc[car,'chargeRate'] = 0
-
-                # RESET RCCHUNKS COUNT
-                carDataDF.loc[car, 'rcChunks'] = 0
 
                 # UPDATE SHIFT DATA IN CAR DATA DF
                 carDataDF.loc[car, 'shiftIndex'] = shiftIndex + 1
@@ -261,7 +259,7 @@ def readFullBattCars(time, carDataDF, simulationDF, totalCost, eventChange):
             # RECOGNISE AN EVENT HAS HAPPENED
             eventChange = True
 
-    return eventChange
+    return eventChange, carDataDF
 
 ################################################
 # READ TARIFF CHANGES
@@ -339,7 +337,7 @@ def driving(time, carDataDF, driveDataByCar, breaksDF,
     rcCount, carDataDF, drivingCarsDF = checkRC(carDataDF, rcDuration, rcPerc, rcCount)
 
     for rows in range(len(drivingCarsDF)):
-        car = carDataDF.index[rows]
+        car = drivingCarsDF.index[rows]
         
         # ***** FOR CARS THAT DON'T NEED RAPID CHARGING, DECREASE BATT (DRIVE) *****
         if carDataDF.loc[car, 'rcChunks'] == 0:
