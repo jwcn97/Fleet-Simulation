@@ -26,6 +26,52 @@ def rereadTime(ti):
 def incrementTime(ti):
     return (rereadTime(ti) + dt.timedelta(hours=1/chunks))
 
+# FIND THE START TIME OF NEXT SHIFT
+def nextShiftStart(carNum, carDataDF, shiftsByCar):
+    # READ INDEX OF LATEST SHIFT AND INDEX OF THE LAST SHIFT
+    shiftIndex = carDataDF.loc[carNum, 'shiftIndex']
+    lastShiftIndex = len(shiftsByCar[str(carNum)])
+
+    # IF NEXT SHIFT EXISTS, TAKE START TIME OF NEXT SHIFT
+    if (shiftIndex + 1) < lastShiftIndex:
+        nextStart = readTime(shiftsByCar[str(carNum)].loc[shiftIndex+1, 'startShift'])
+
+    # IF SHIFT INDEX GOES BEYOND LAST SHIFT, TAKE ARBITRARY LEAVETIME
+    else:
+        lastStart = shiftsByCar[str(carNum)].loc[lastShiftIndex-1, 'startShift']
+        lastDay = readTime(lastStart).date() + dt.timedelta(days=1)
+        nextStart = readTime(str(lastDay) + " 23:59:59")
+    
+    return nextStart
+
+# FIND THE NEXT ZONE WHERE TARIFF IS CHEAPER
+def nextGreenZone(time, pricesDF):
+    # ***** DEFINE NEXT GREEN ZONE *****
+    # READ IN START AND END TIMES OF GREEN ZONE
+    greenStartHr = getData(pricesDF, 'startGreenZone')
+    greenEndHr = getData(pricesDF, 'endGreenZone')
+
+    # IF GREEN ZONE RUNS OVERNIGHT:
+    if (readTime(greenStartHr) > readTime(greenEndHr)):
+        # GREEN START = CURRENT DAY + GREEN ZONE START TIME
+        greenStart = readTime(str(time.date()) + " " + greenStartHr)
+        # GREEN END = NEXT DAY + GREEN END TIME
+        greenEnd = readTime(str(time.date() + dt.timedelta(days=1)) + " " + greenEndHr)
+
+    # IF GREEN ZONE DOESN'T RUN OVERNIGHT, CONSIDER CASE WHERE TIME IS PAST MIDNIGHT
+    else:
+        # CALCULATE DIFFERENCE GREEN ZONE START TIME AND MIDNIGHT
+        arbGreenStart = dt.datetime.combine(dt.date.today(), readTime(greenStartHr))
+        arbMidnight = dt.datetime.combine(dt.date.today(), readTime("00:00:00"))
+        gap = arbGreenStart - arbMidnight
+
+        # GREEN START = (TIME-GAP) + 1 DAY + GREEN ZONE START TIME
+        greenStart = readTime(str((time-gap).date() + dt.timedelta(days=1)) + " " + greenStartHr)
+        # GREEN END = (TIME-GAP) + 1 DAY + GREEN ZONE END TIME
+        greenEnd = readTime(str((time-gap).date() + dt.timedelta(days=1)) + " " + greenEndHr)
+
+    return greenStart, greenEnd
+
 ##############################
 # MISC FUNCTIONS
 ##############################
@@ -45,17 +91,17 @@ def getLists(df):
     # initialise car data
     car_data = []
     for (size,quantity) in eval(getData(df, 'cars')):
-        # [battkW, inDepot, battSize, chargePt, shiftIndex, latestStartShift, latestEndShift]
-        car_data += [[size,1,size,np.nan,-1,np.nan,np.nan]]*quantity
+        # [battkW, inDepot, battSize, chargePt, chargeRate, rcChunks, shiftIndex, latestStartShift, latestEndShift]
+        car_data += [[size,1,size,np.nan,0,0,-1,np.nan,np.nan]]*quantity
     
     # assign available charge points to cars
     for cp_id in range(len(chargePt_data)):
         size = car_data[cp_id][0]
-        car_data[cp_id] = [size,1,size,cp_id,-1,np.nan,np.nan]
+        car_data[cp_id] = [size,1,size,cp_id,0,0,-1,np.nan,np.nan]
 
     return car_data, chargePt_data
 
-# CHOOSE MAX TOTAL COST OF THE ROW idk how to explain
+# CHOOSE MAX TOTAL COST OF THE ROW
 def adjustTotalCost(time, simulationDF):
     # SELECT ROWS IN SIMULATION WHERE TIME == TIME
     selectRows = simulationDF.loc[simulationDF['time']==time]
@@ -132,7 +178,7 @@ def unpackShifts(carData, allShiftsDF):
     # Enter depot
     # Let inDepot = 1 in carDataDF
 
-def inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, toChargeDF, eventChange):
+def inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, eventChange):
     # FOR EVERY CAR:
     for car in range(0, len(carDataDF)):
 
@@ -171,7 +217,10 @@ def inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, toChargeDF, even
                 carDataDF.loc[car,'chargePt'] = np.nan
 
                 # LET CHARGE RATE = 0 IN TO-CHARGE DF
-                toChargeDF.loc[car,'chargeRate'] = 0
+                carDataDF.loc[car,'chargeRate'] = 0
+
+                # RESET RCCHUNKS COUNT
+                carDataDF.loc[car, 'rcChunks'] = 0
 
                 # UPDATE SHIFT DATA IN CAR DATA DF
                 carDataDF.loc[car, 'shiftIndex'] = shiftIndex + 1
@@ -181,12 +230,12 @@ def inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, toChargeDF, even
                 # RECOGNISE AN EVENT HAS HAPPENED
                 eventChange = True
 
-    return eventChange, carDataDF, depot, chargePtDF, toChargeDF
+    return eventChange, carDataDF, depot, chargePtDF
 
 ################################################
 # READ CARS WITH FULL BATTERY INTO SIMULATION DF
 ################################################
-def readFullBattCars(time, carDataDF, simulationDF, toChargeDF, totalCost, eventChange):
+def readFullBattCars(time, carDataDF, simulationDF, totalCost, eventChange):
     # SELECT VEHICLES IN THE DEPOT WITH FULL BATTERY
     chargeDF = carDataDF.loc[carDataDF['inDepot'] == 1]
     fullBattDF = chargeDF.loc[chargeDF['battkW'] == chargeDF['battSize']]
@@ -194,7 +243,7 @@ def readFullBattCars(time, carDataDF, simulationDF, toChargeDF, totalCost, event
     # IF CAR IS FULLY CHARGED, LET CHARGE RATE = 0 IN TO-CHARGE DF
     for row in range(len(fullBattDF)):
         car = fullBattDF.index[row]
-        toChargeDF.loc[car, 'chargeRate'] = 0
+        carDataDF.loc[car, 'chargeRate'] = 0
 
     # ***** IF NEW CARS REACH FULL BATT, RECOGNISE EVENT *****
     # CREATE A SET FOR CARS THAT HAD FULL BATT IN PREVIOUS TIME
@@ -212,15 +261,15 @@ def readFullBattCars(time, carDataDF, simulationDF, toChargeDF, totalCost, event
             # RECOGNISE AN EVENT HAS HAPPENED
             eventChange = True
 
-    return eventChange, toChargeDF
+    return eventChange
 
 ################################################
 # READ TARIFF CHANGES
 ################################################
-def readTariffChanges(time, pricesDF, company, eventChange):
+def readTariffChanges(time, pricesDF, eventChange):
     # READ IN START AND END TIMES OF GREEN ZONE
-    greenStart = pricesDF.loc[pricesDF['company']==company, 'startGreenZone'].to_string(index=False)[1:]
-    greenEnd = pricesDF.loc[pricesDF['company']==company, 'endGreenZone'].to_string(index=False)[1:]
+    greenStart = getData(pricesDF, 'startGreenZone')
+    greenEnd = getData(pricesDF, 'endGreenZone')
 
     # READ IN TIME WITHOUT DATE
     timeHr = readTime(str(time.time()))
@@ -232,23 +281,13 @@ def readTariffChanges(time, pricesDF, company, eventChange):
 
     return eventChange
 
-###############################
-# LOOK AT CARS OUTSIDE THE DEPOT
-
-# FOR CARS THAT NEED RAPID CHARGING: RAPID CHARGE
-# FOR CARS THAT DON'T NEED RAPID CHARGING: DECREASE BATT
-###############################
-def driving(time, carDataDF, driveDataByCar, 
-            rcCount, rcDuration, rcPerc, rcRate, 
-            simulationDF, ind, totalCost):
+###########################################################
+# CHECK WHETHER VEHICLES REQUIRE RAPID CHARGE
+# UPDATE RAPID CHARGE CHUNKS IN CARDATADF and UPDATE RCCOUNT
+###########################################################
+def checkRC(carDataDF, rcDuration, rcPerc, rcCount):
     # FIND CARS OUTSIDE OF DEPOT
     drivingCarsDF = carDataDF.loc[carDataDF["inDepot"]==0]
-
-    # ***** DIVIDE CARS THAT NEED RAPID CHARGING AND CARS THAT DONT INTO 2 LISTS *****
-    # FIND CARS TO RAPID CHARGE AND APPEND TO LIST
-    toRapidCharge = []
-    # IF NO NEED TO RAPID CHARGE, APPEND TO ANOTHER LIST
-    dontRapidCharge = []
 
     # FOR CARS OUTSIDE OF DEPOT:
     #   * CHECK FOR CARS CURRENTLY RAPID CHARGING
@@ -257,102 +296,113 @@ def driving(time, carDataDF, driveDataByCar,
         car = drivingCarsDF.index[row]
 
         # FIND DURATION OF RAPID CHARGE IN CHUNKS
-        RCchunks = np.ceil(chunks/(60/rcDuration))
-
-        # PREPARE BASE CASE FOR WHILE LOOP
-        chunkCount = 1
-        checkTime = str(time - ((dt.timedelta(hours=1/chunks))*chunkCount))
-        prevSimChunk = simulationDF.loc[simulationDF['time']==checkTime]
-        checkEvent = prevSimChunk.loc[prevSimChunk['car']==car, 'event'].to_string(index=False)
-
-        # CHECK IF CAR HAS BEEN RAPID CHARGING
-        while checkEvent == " RC":
-            chunkCount += 1
-            checkTime = str(time - ((dt.timedelta(hours=1/chunks))*chunkCount))
-            prevSimChunk = simulationDF.loc[simulationDF['time']==checkTime]
-            checkEvent = prevSimChunk.loc[prevSimChunk['car']==car, 'event'].to_string(index=False)
+        rcChunks = np.ceil(chunks/(60/rcDuration))
+        # GET THE RAPID CHARGE STATUS OF VEHICLE
+        chunkCount = carDataDF.loc[car, 'rcChunks']
 
         # IF CAR IS RAPID CHARGING AND REQUIRES MORE RAPID CHARGING:
-        if 1 < chunkCount <= RCchunks:
-            # APPEND TO RAPID CHARGE LIST
-            toRapidCharge.append(car)
+        if 0 < chunkCount < rcChunks:
+            # INCREMENT RAPID CHARGE CHUNKS COUNT
+            carDataDF.loc[car, 'rcChunks'] += 1
 
         # ELSE (CAR HAS NOT BEEN RAPID CHARGING), CHECK IF CAR NEEDS RAPID CHARGING
         else:
-            # IF BATTERY < RC PERCENTAGE (INPUT), CAR NEEDS RAPID CHARGING
             batt = carDataDF.loc[car, 'battkW']
             battSize = carDataDF.loc[car, 'battSize']
+            # IF BATTERY < RC PERCENTAGE (INPUT), CAR NEEDS RAPID CHARGING
             if batt < (battSize*(rcPerc/100)):
-                # APPEND TO RAPID CHARGE LIST
-                toRapidCharge.append(car)
+                # INCREMENT RAPID CHARGE CHUNKS COUNT
+                carDataDF.loc[car, 'rcChunks'] += 1
                 # INCREASE RAPID CHARGE COUNT
                 rcCount += 1
 
-            # OTHERWISE, ADD TO DON'T RAPID CHARGE LIST
-            else: dontRapidCharge.append(car)
+            # OTHERWISE, RESET RAPID CHARGE CHUNKS COUNT
+            else: carDataDF.loc[car, 'rcChunks'] = 0
+    
+    return rcCount, carDataDF, drivingCarsDF
 
-    # ***** FOR CARS THAT DON'T NEED RAPID CHARGING, DECREASE BATT (DRIVE) *****
+###############################
+# LOOK AT CARS OUTSIDE THE DEPOT
+
+# FOR CARS THAT NEED RAPID CHARGING: RAPID CHARGE
+# FOR CARS THAT DON'T NEED RAPID CHARGING: DECREASE BATT
+###############################
+def driving(time, carDataDF, driveDataByCar, breaksDF, 
+            rcCount, rcDuration, rcPerc, rcRate, 
+            simulationDF, ind, totalCost):
+    # GET CERTAIN PARAMETERS
     drivingValues = driveDataByCar['0'].shape[0]
-    for carsDontRC in range(len(dontRapidCharge)):
-        car = dontRapidCharge[carsDontRC]
+    breakStart = getData(breaksDF, 'startBreak')
+    breakEnd = getData(breaksDF, 'endBreak')
 
-        # READ BATTERY
-        batt = carDataDF.loc[car, 'battkW']
+    # UPDATE RAPID CHARGE CHUNKS IN CARDATADF and UPDATE RCCOUNT
+    rcCount, carDataDF, drivingCarsDF = checkRC(carDataDF, rcDuration, rcPerc, rcCount)
 
-        # GET RANDOMISED VALUE FOR MILEAGE AND MPKW
-        mileage = driveDataByCar[str(car)].loc[ind % drivingValues, 'mileage']
-        mpkw = driveDataByCar[str(car)].loc[ind % drivingValues, 'mpkw']
+    for rows in range(len(drivingCarsDF)):
+        car = carDataDF.index[rows]
+        
+        # ***** FOR CARS THAT DON'T NEED RAPID CHARGING, DECREASE BATT (DRIVE) *****
+        if carDataDF.loc[car, 'rcChunks'] == 0:
+            # READ BATTERY
+            batt = carDataDF.loc[car, 'battkW']
 
-        # CALCULATE RATE OF BATT DECREASE
-        kwphr = mileage/mpkw
+            # GET RANDOMISED VALUE FOR MILEAGE AND MPKW
+            mileage = driveDataByCar[str(car % 4)].loc[ind % drivingValues, 'mileage']
+            mpkw = driveDataByCar[str(car % 4)].loc[ind % drivingValues, 'mpkw']
 
-        # UPDATE SIMULATION ACCORDINGLY
-        simulationDF = simulationDF.append({
-            'time': time,
-            'car': car,
-            'chargeDiff': round(-kwphr/chunks, 1),
-            'batt': round(batt, 1),
-            'event': 'drive',
-            'costPerCharge': 0,
-            'totalCost': round(totalCost, 2)
-        }, ignore_index=True)
+            # CALCULATE RATE OF BATT DECREASE
+            kwphr = 4#mileage/mpkw
 
-        # DECREASE BATTERY
-        batt -= kwphr/chunks
+            # UPDATE KWPHR TO BE 0.0 DURING BREAK PERIOD
+            if not breakStart == "None":
+                if readTime(breakStart) <= time.time() < readTime(breakEnd):
+                    kwphr = 0.0
 
-        # ASSIGN BATTERY
-        carDataDF.loc[car,'battkW'] = batt
+            # UPDATE SIMULATION ACCORDINGLY
+            simulationDF = simulationDF.append({
+                'time': time,
+                'car': car,
+                'chargeDiff': round(-kwphr/chunks, 1),
+                'batt': round(batt, 1),
+                'event': 'drive' if not kwphr==0.0 else 'wait',
+                'costPerCharge': 0,
+                'totalCost': round(totalCost, 2)
+            }, ignore_index=True)
 
-    # ***** FOR CARS THAT NEED RAPID CHARGING, RAPID CHARGE *****
-    for carsToRC in range(len(toRapidCharge)):
-        car = toRapidCharge[carsToRC]
+            # DECREASE BATTERY
+            batt -= kwphr/chunks
 
-        # READ BATTERY AND BATTERY SIZE
-        batt = carDataDF.loc[car, 'battkW']
-        battSize = carDataDF.loc[car, 'battSize']
+            # ASSIGN BATTERY
+            carDataDF.loc[car,'battkW'] = batt
+        
+        # ***** FOR CARS THAT NEED RAPID CHARGING, RAPID CHARGE *****
+        else:
+            # READ BATTERY AND BATTERY SIZE
+            batt = carDataDF.loc[car, 'battkW']
+            battSize = carDataDF.loc[car, 'battSize']
 
-        # CALCULATE BATTERY INCREASE
-        if batt + rcRate/chunks > battSize: RCbattIncrease = battSize - batt
-        else:                               RCbattIncrease = rcRate/chunks
+            # CALCULATE BATTERY INCREASE
+            if batt + rcRate/chunks > battSize: RCbattIncrease = battSize - batt
+            else:                               RCbattIncrease = rcRate/chunks
 
-        # UPDATE RAPID CHARGE COUNT AND TOTAL COST
-        RCcost = 0.3*(RCbattIncrease)
-        totalCost += RCcost
+            # UPDATE RAPID CHARGE COUNT AND TOTAL COST
+            RCcost = 0.3*(RCbattIncrease)
+            totalCost += RCcost
 
-        # UPDATE SIMULATION ACCORDINGLY
-        simulationDF = simulationDF.append({
-            'time': time,
-            'car': car,
-            'chargeDiff': round(RCbattIncrease, 1),
-            'batt': round(batt, 1),
-            'event': 'RC',
-            'costPerCharge': round(RCcost, 2),
-            'totalCost': round(totalCost, 2)
-        }, ignore_index=True)
+            # UPDATE SIMULATION ACCORDINGLY
+            simulationDF = simulationDF.append({
+                'time': time,
+                'car': car,
+                'chargeDiff': round(RCbattIncrease, 1),
+                'batt': round(batt, 1),
+                'event': 'RC',
+                'costPerCharge': round(RCcost, 2),
+                'totalCost': round(totalCost, 2)
+            }, ignore_index=True)
 
-        # RAPID CHARGE and ASSIGN BATTERY
-        batt += RCbattIncrease
-        carDataDF.loc[car,'battkW'] = batt
+            # RAPID CHARGE and ASSIGN BATTERY
+            batt += RCbattIncrease
+            carDataDF.loc[car,'battkW'] = batt
 
     return carDataDF, rcCount, simulationDF, totalCost
 
@@ -384,8 +434,8 @@ def findChargePt(carDataDF, car, chargePtDF):
 # CHARGE VEHICLE FOR ONE HOUR
 ###################################
 def charge(time, carDataDF, depot, 
-            simulationDF, chargePtDF, toChargeDF, 
-            pricesDF, company, totalCost):
+            simulationDF, chargePtDF, 
+            pricesDF, totalCost):
     # FOR EVERY CAR IN THE DEPOT
     for index in range(len(depot)):
         car = depot[index]
@@ -393,21 +443,21 @@ def charge(time, carDataDF, depot,
         # READ IN BATTERY, BATTERY SIZE AND CHARGE RATE
         batt = carDataDF.loc[car,'battkW']
         battSize = carDataDF.loc[car,'battSize']
-        chargeRate = toChargeDF.loc[car,'chargeRate']
+        chargeRate = carDataDF.loc[car,'chargeRate']
 
         # FIND PRICE OF CHARGE AT TIME
         #   * Read in start and end times of green zone
-        greenStart = pricesDF.loc[pricesDF['company']==company, 'startGreenZone'].to_string(index=False)[1:]
-        greenEnd = pricesDF.loc[pricesDF['company']==company, 'endGreenZone'].to_string(index=False)[1:]
+        greenStart = getData(pricesDF, 'startGreenZone')
+        greenEnd = getData(pricesDF, 'endGreenZone')
         #   * Read in time without date
         timeHr = readTime(str(time.time()))
 
         # IF TIME IS WITHIN GREEN ZONE, PRICE = GREEN ZONE PRICE
         if readTime(greenStart) <= timeHr < readTime(greenEnd):
-            price = float(pricesDF.loc[pricesDF['company']==company, 'priceGreenZone'])
+            price = float(getData(pricesDF, 'priceGreenZone'))
         # ELSE, PRICE = RED ZONE PRICE
         else:
-            price = float(pricesDF.loc[pricesDF['company']==company, 'priceRedZone'])
+            price = float(getData(pricesDF, 'priceRedZone'))
 
         # CALCULATE COST OF CHARGE AND ADD THIS TO TOTAL COST
         costOfCharge = (chargeRate*price)/chunks
