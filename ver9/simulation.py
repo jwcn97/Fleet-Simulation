@@ -19,9 +19,9 @@ runTime = 24*5
 outputFolder = "results_test/"
 company = "BritishGas"
 mpkw = "HighMpkwLowSD"
-schedule = "shift1"
+schedule = "shift5"
 hasBreak = 0
-fleetType = 0
+fleetType = 6
 
 # READ IN NECESSARY CSV FILES
 allShiftsDF = pd.read_csv("csv/schedules/" + schedule + ".csv", sep=";", index_col=None)
@@ -33,42 +33,51 @@ breaksDF = breaksDF.loc[breaksDF.id == hasBreak]
 fleetDF = pd.read_csv("csv/fleetData.csv", sep=";", index_col=None)
 fleetData = fleetDF.loc[fleetDF.index == fleetType]
 
-time_ = dt.datetime.now()
-dumbDF, dumbRC, dumbCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-                        dumbCharge)
+# dumbDF, dumbRC, dumbCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
+#                         dumbCharge)
 
-leaveTDF, leaveTRC, leaveTCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-                        smartCharge_leavetime)
+# leaveTDF, leaveTRC, leaveTCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
+#                         smartCharge_leavetime)
 
-battDF, battRC, battCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-                        smartCharge_batt)
+# battDF, battRC, battCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
+#                         smartCharge_batt)
 
-smartDF, smartRC, smartCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-                        smartCharge_battOverLeavetime)
+# smartDF, smartRC, smartCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
+#                         smartCharge_battOverLeavetime)
+
+# costDF, costRC, costCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
+#                         costSensitiveCharge)
+# styleDF(costDF).to_excel('predictive_charging_test_result/costSensitiveCharge_shift5.xlsx')
 
 costDF, costRC, costCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-                        costSensitiveCharge)
-print((dt.datetime.now()-time_).total_seconds())
+                        predictiveCharging)
+# styleDF(costDF).to_excel('predictive_charging_test_result/predictiveCharging_shift5_test.xlsx')
 
-###############################################################
-# SAVE TO EXCEL (ONLY RUN WHEN ALL ALGORITHMS ARE UNCOMMENTED)
-# NOTE: CREATE AN OUTPUT FOLDER FIRST
-###############################################################
-# open writer
-writer = pd.ExcelWriter(outputFolder + "fleet" + str(fleetType) + "_case1.xlsx")
-# write files
-styleDF(dumbDF).to_excel(writer, sheet_name="dumb")
-styleDF(leaveTDF).to_excel(writer, sheet_name="leavetime")
-styleDF(battDF).to_excel(writer, sheet_name="batt")
-styleDF(smartDF).to_excel(writer, sheet_name="smart")
-styleDF(costDF).to_excel(writer, sheet_name="cost")
-# close writer
-writer.save()
+# costDF, costRC, costCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
+#                         predictiveCharging2)
+# styleDF(costDF).to_excel('predictive_charging_test_result/predictiveCharging2_shift5.xlsx')
+
+# ###############################################################
+# # SAVE TO EXCEL (ONLY RUN WHEN ALL ALGORITHMS ARE UNCOMMENTED)
+# # NOTE: CREATE AN OUTPUT FOLDER FIRST
+# ###############################################################
+# # open writer
+# writer = pd.ExcelWriter(outputFolder + "fleet" + str(fleetType) + "_case1.xlsx")
+# # write files
+# styleDF(dumbDF).to_excel(writer, sheet_name="dumb")
+# styleDF(leaveTDF).to_excel(writer, sheet_name="leavetime")
+# styleDF(battDF).to_excel(writer, sheet_name="batt")
+# styleDF(smartDF).to_excel(writer, sheet_name="smart")
+# styleDF(costDF).to_excel(writer, sheet_name="cost")
+# # close writer
+# writer.save()
 
 # total_cars = 4
 # total_algos = 5

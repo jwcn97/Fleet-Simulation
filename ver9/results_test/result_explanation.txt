@@ -1,10 +1,10 @@
+base case parameters:
 company = "BritishGas"
-mpkw = "HighMpkwLowSD"
+kwphr = 4 (constant)
 rcPerc = 20%
 run on 15 min chunks
 
 cases:
-0. base case
 1. base case with break
 2. base case with charging break
 3. variations in base case
