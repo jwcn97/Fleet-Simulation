@@ -1,3 +1,4 @@
+shift0 - base case
 shift1 - base case with charging break
 shift2 - base case (variation)
 shift3 - base case with charging break (variation)

@@ -12,9 +12,7 @@ from supportFunctions import *
 #################################
 # INCREASE BATT DURING CHARGE
 #################################
-def dumbCharge(time, carDataDF, depot, shiftsByCar, 
-               availablePower, simulationDF, chargePtDF,
-               pricesDF, totalCost):
+def dumbCharge(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange):
     # SELECT CARS IN DEPOT THAT ARE NOT FULLY CHARGED
     needChargeDF = carDataDF.loc[(carDataDF['inDepot'] == 1) &
                                  (carDataDF['battkW'] < carDataDF['battSize'])]
@@ -58,14 +56,12 @@ def dumbCharge(time, carDataDF, depot, shiftsByCar,
             # UPDATE CHARGE RATE
             carDataDF.loc[car, 'chargeRate'] = chargeRate
 
-    return carDataDF, chargePtDF, totalCost
+    return carDataDF
 
 #########################################
 # INCREASE BATT DURING CHARGE (LEAVETIME)
 #########################################
-def smartCharge_leavetime(time, carDataDF, depot, shiftsByCar, 
-                          availablePower, simulationDF, chargePtDF,
-                          pricesDF, totalCost):
+def smartCharge_leavetime(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange):
     # CREATE A LIST FOR CARS AND THEIR LEAVETIMES (TIME UNTIL CAR LEAVSE DEPOT)
     leaveTList = []
 
@@ -124,14 +120,12 @@ def smartCharge_leavetime(time, carDataDF, depot, shiftsByCar,
             # ADJUST AVAILABLE POWER
             availablePower -= chargeRate
 
-    return carDataDF, chargePtDF, totalCost
+    return carDataDF
 
 ######################################
 # INCREASE BATT DURING CHARGE (BATT)
 ######################################
-def smartCharge_batt(time, carDataDF, depot, shiftsByCar, 
-                     availablePower, simulationDF, chargePtDF,
-                     pricesDF, totalCost):
+def smartCharge_batt(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange):
     # CREATE A LIST FOR CARS AND THEIR BATT NEEDED
     battNeededList = []
 
@@ -187,16 +181,14 @@ def smartCharge_batt(time, carDataDF, depot, shiftsByCar,
             # ADJUST AVAILABLE POWER
             availablePower -= chargeRate
 
-    return carDataDF, chargePtDF, totalCost
+    return carDataDF
 
 ############################################
 # INCREASE BATT DURING CHARGE (SUPER SMART)
 ############################################
 # PRIORITY = BATT NEEDED/TIME LEFT IN DEPOT
 # CHARGE RATE = (PRIORITY/SUM OF ALL PRIORITIES)*AVAILABLE POWER
-def smartCharge_battOverLeavetime(time, carDataDF, depot, shiftsByCar,
-                     availablePower, simulationDF, chargePtDF,
-                     pricesDF, totalCost):
+def smartCharge_battOverLeavetime(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange):
     # CREATE A LIST FOR CARS AND THEIR LEAVETIMES AND BATT NEEDED
     priorityRows = []
 
@@ -222,19 +214,17 @@ def smartCharge_battOverLeavetime(time, carDataDF, depot, shiftsByCar,
     # IN SORTED ORDER, CALCULATE PRIORITY RATIO AND CHARGE
     carDataDF = priorityCharge(leaveTimes, availablePower, carDataDF, chargePtDF)
 
-    return carDataDF, chargePtDF, totalCost
+    return carDataDF
 
 ##############################################
 # INCREASE BATT DURING CHARGE (COST SENSITIVE)
 ##############################################
 # PRIORITY = BATT NEEDED/TIME LEFT IN DEPOT
-# IF CAR WILL CHARGE OVER GREEN ZONE:
-    # DELAY CHARGING UNTIL START GREEN ZONE STARTS (PRIORITY = 0)
+# IF CAR WILL CHARGE OVER WHOLE OF LOW TARIFF ZONE:
+    # DELAY CHARGING UNTIL START LOW TARIFF ZONE STARTS (PRIORITY = 0)
 # CHARGE RATE = (PRIORITY/SUM OF ALL PRIORITIES)*AVAILABLE POWER
-def costSensitiveCharge(time, carDataDF, depot, shiftsByCar,
-                        availablePower, simulationDF, chargePtDF,
-                        pricesDF, totalCost):
-    # DEFINE NEXT GREEN ZONE
+def costSensitiveCharge(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange):
+    # DEFINE NEXT LOW TARIFF ZONE
     lowTariffStart, lowTariffEnd = nextLowTariffZone(time, pricesDF)
     
     # CREATE A LIST FOR CARS AND THEIR LEAVETIME AND BATT NEEDED
@@ -252,10 +242,10 @@ def costSensitiveCharge(time, carDataDF, depot, shiftsByCar,
         battLeft = carDataDF.loc[carNum,'battSize']-carDataDF.loc[carNum,'battkW']
         prior = battLeft/hrsLeft
 
-        # IF GREEN ZONE HASN'T STARTED YET,
-        # AND IF CAR WILL BE CHARGING THROUGHOUT WHOLE OF GREEN ZONE:
+        # IF LOW TARIFF ZONE HASN'T STARTED YET,
+        # AND IF CAR WILL BE CHARGING THROUGHOUT WHOLE OF LOW TARIFF ZONE:
         if (time < lowTariffStart) and (nextStart >= lowTariffEnd):
-            # DELAY CHARGING UNTIL GREEN ZONE
+            # DELAY CHARGING UNTIL LOW TARIFF ZONE
             prior = 0.0
 
         # LET PRIORITY = BATTLEFT/TIME LEFT, APPEND TO LIST
@@ -269,18 +259,20 @@ def costSensitiveCharge(time, carDataDF, depot, shiftsByCar,
     # IN SORTED ORDER, CALCULATE PRIORITY RATIO AND CHARGE
     carDataDF = priorityCharge(leaveTimes, availablePower, carDataDF, chargePtDF)
 
-    return carDataDF, chargePtDF, totalCost
+    return carDataDF
 
 ##############################################
 # INCREASE BATT DURING CHARGE (PREDICTIVE)
 ##############################################
-def predictiveCharging(time, carDataDF, depot, shiftsByCar,
-                        availablePower, simulationDF, chargePtDF,
-                        pricesDF, totalCost):
-    # DEFINE NEXT GREEN ZONE
+# PRIORITY = BATT NEEDED/TIME LEFT IN DEPOT
+# THERE WILL BE A FUNCTION (READ EXTRA CHARGING) TO LOOK INTO NEXT LOW TARIFF ZONE AND SEE WHETHER VEHICLES NEED EXTRA CHARGING
+#   IF YES, IT WILL STATE THAT AN EVENT HAS HAPPENED SO THAT THE ALGORITHM WILL RUN
+#   IT WILL ALSO RETURN THE TIME VEHICLES NEED TO CHARGE
+# CHARGE VEHICLE WHEN THE TIME COMES
+# CHARGE RATE = (PRIORITY/SUM OF ALL PRIORITIES)*AVAILABLE POWER
+def predictiveCharging(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange):
+    # DEFINE NEXT LOW TARIFF ZONE
     lowTariffStart, lowTariffEnd = nextLowTariffZone(time, pricesDF)
-    
-    print(extraCharging(lowTariffStart, lowTariffEnd, depot, carDataDF, shiftsByCar, availablePower))
 
     # CREATE A LIST FOR CARS AND THEIR LEAVETIME AND BATT NEEDED
     priorityRows = []
@@ -297,16 +289,11 @@ def predictiveCharging(time, carDataDF, depot, shiftsByCar,
         battLeft = carDataDF.loc[carNum,'battSize']-carDataDF.loc[carNum,'battkW']
         prior = battLeft/hrsLeft
 
-        # # IF ALL CARS ARE IN DEPOT,
-        # # AND IF CAR WILL BE CHARGING THROUGHOUT WHOLE OF GREEN ZONE:
-        # if (len(depot) == len(carDataDF)) and (nextStart >= lowTariffEnd):
-        #     # DELAY CHARGING UNTIL GREEN ZONE
-        #     prior = 0.0
-
-        # IF TIME IS BEFORE GREEN ZONE,
-        # AND IF CAR WILL BE CHARGING THROUGHOUT WHOLE OF GREEN ZONE:
-        if (time < lowTariffStart) and (nextStart >= lowTariffEnd):
-            # DELAY CHARGING UNTIL GREEN ZONE
+        # IF TIME IS BEFORE LOW TARIFF ZONE,
+        # AND IF CAR WILL BE CHARGING THROUGHOUT WHOLE OF LOW TARIFF ZONE
+        # AND IF VEHICLE IS STILL WAITING FOR THE EXTRA CHARGING:
+        if (time < lowTariffStart) and (nextStart > lowTariffStart) and (eventChange[1] != "extraCharging"):
+            # DELAY CHARGING UNTIL LOW TARIFF ZONE
             prior = 0.0
 
         # LET PRIORITY = BATTLEFT/TIME LEFT, APPEND TO LIST
@@ -320,18 +307,16 @@ def predictiveCharging(time, carDataDF, depot, shiftsByCar,
     # IN SORTED ORDER, CALCULATE PRIORITY RATIO AND CHARGE
     carDataDF = priorityCharge(leaveTimes, availablePower, carDataDF, chargePtDF)
 
-    return carDataDF, chargePtDF, totalCost
+    return carDataDF
 
-def predictiveCharging2(time, carDataDF, depot, shiftsByCar,
-                        availablePower, simulationDF, chargePtDF,
-                        pricesDF, totalCost):
-    # DEFINE NEXT GREEN ZONE
+def predictiveCharging2(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange):
+    # DEFINE NEXT LOW TARIFF ZONE
     lowTariffStart, lowTariffEnd = nextLowTariffZone(time, pricesDF)
     
     # CREATE A LIST FOR CARS AND THEIR LEAVETIME AND BATT NEEDED
     priorityRows = []
 
-    # STORE INOUTDEPOT EVENTS DURING GREEN ZONE
+    # STORE INOUTDEPOT EVENTS DURING LOW TARIFF ZONE
     gzStatus = getGZStatus(depot, carDataDF, shiftsByCar, lowTariffStart, lowTariffEnd)
     
     # ***** CALCULATE PRIORITY FOR EACH CAR AND APPEND TO A LIST *****
@@ -346,13 +331,13 @@ def predictiveCharging2(time, carDataDF, depot, shiftsByCar,
         battLeft = carDataDF.loc[carNum,'battSize']-carDataDF.loc[carNum,'battkW']
         prior = battLeft/hrsLeft
 
-        # IF GREEN ZONE HASN'T STARTED YET,
-        # AND IF CAR WILL BE CHARGING THROUGHOUT GREEN ZONE:
+        # IF LOW TARIFF ZONE HASN'T STARTED YET,
+        # AND IF CAR WILL BE CHARGING THROUGHOUT LOW TARIFF ZONE:
         if (time < lowTariffStart) and (nextStart > lowTariffStart):
-            # DELAY CHARGING UNTIL GREEN ZONE
+            # DELAY CHARGING UNTIL LOW TARIFF ZONE
             prior = 0.0
 
-        # DETERMINE WHETHER VEHICLE IS ABLE TO FULLY CHARGE IN GREEN ZONE
+        # DETERMINE WHETHER VEHICLE IS ABLE TO FULLY CHARGE IN LOW TARIFF ZONE
         carTimes = gzStatus.loc[(gzStatus.car == carNum)]
         if (len(carTimes) > 0) and (len(depot) == len(carDataDF)):
             carIn, carOut = carTimes.iloc[:,0]
@@ -379,7 +364,7 @@ def predictiveCharging2(time, carDataDF, depot, shiftsByCar,
     # IN SORTED ORDER, CALCULATE PRIORITY RATIO AND CHARGE
     carDataDF = priorityCharge(leaveTimes, availablePower, carDataDF, chargePtDF)
 
-    return carDataDF, chargePtDF, totalCost
+    return carDataDF
 
 #################################################################################################################################
 
@@ -426,12 +411,13 @@ def runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
     # RUN SIMULATION FOR ALL OF RUN TIME
     for i in range(0, runTime*chunks):
         # INITIALISE A VARIABLE TO CHECK FOR EVENT CHANGES
-        eventChange = False
+        eventChange = (False, None)
 
         # *** RUN FUNCTIONS THAT INCLUDE WILL RECOGNISE CHANGES IN EVENTS ***
         eventChange, carDataDF, depot, chargePtDF = inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, eventChange)
         eventChange, carDataDF = readFullBattCars(time, carDataDF, simulationDF, totalCost, eventChange)
         eventChange = readTariffChanges(time, pricesDF, eventChange)
+        eventChange = readExtraCharging(time, pricesDF, depot, carDataDF, shiftsByCar, availablePower, eventChange)
 
         # *** RUN FUNCTIONS AFFECTING CARS OUTSIDE THE DEPOT ***
         # DECREASE BATT/RAPID CHARGE CARS OUTSIDE THE DEPOT
@@ -442,10 +428,8 @@ def runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
         # *** RUN FUNCTIONS AFFECTING CARS IN THE DEPOT ***
         # IF THERE IS AN EVENT and THERE ARE CARS THAT REQUIRE CHARGING
         # RUN CHARGING ALGORITHM
-        if (eventChange == True) and (len(depot) > 0):
-            carDataDF, chargePtDF, totalCost = algo(time, carDataDF, depot, shiftsByCar, 
-                                                    availablePower, simulationDF, chargePtDF, 
-                                                    pricesDF, totalCost)
+        if (eventChange[0] == True) and (len(depot) > 0):
+            carDataDF = algo(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange)
 
         # CHARGE/READ WAITING CARS IN THE DEPOT
         carDataDF, simulationDF, chargePtDF, totalCost = charge(time, carDataDF, depot, 

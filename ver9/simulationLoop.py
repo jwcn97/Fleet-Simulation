@@ -31,7 +31,7 @@ import glob
 for priceType in range(0,2):
     for hasBreak in range(0,3):
         for drives in glob.glob('csv/driving/*.csv'):
-            for fleetType in range(0,12):
+            for fleetType in range(0,13):
                 for schedules in glob.glob('csv/schedules/*.csv'):
                     company = priceDF.loc[priceType, 'company']
                     mpkw = drives.split("\\")[1][0:-4]

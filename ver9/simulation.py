@@ -6,22 +6,18 @@ from chargingFunctions import *
 from stylingFunctions import styleDF
 from graphFunctions import *
 
-# SELECT RAPID CHARGE INFORMATION
-rcDuration = 30     # RAPID CHARGE DURATION (MINUTES)
-rcPerc = 20         # WHAT PERCENTAGE TO START RAPID CHARGING (%)
-rcRate = 50         # RATE OF RAPID CHARGING (KW/HR)
-
-# CHOOSE START TIME AND RUN TIME
-startTime = readTime("2019-01-01 06:00:00")
-runTime = 24*5
-
-# CHOOSE PARAMETERS
+# SELECT PARAMETERS
 outputFolder = "results_test/"
 company = "BritishGas"
 mpkw = "HighMpkwLowSD"
-schedule = "shift5"
+schedule = "shift3"
 hasBreak = 0
-fleetType = 6
+fleetType = 12
+rcDuration = 0.5                            # RAPID CHARGE DURATION (HRS)
+rcPerc = 20                                 # WHAT PERCENTAGE TO START RAPID CHARGING (%)
+rcRate = 50                                 # RATE OF RAPID CHARGING (KW/HR)
+startTime = readTime("2019-01-01 06:00:00") # (FORMAT: DATETIME)
+runTime = 24*5                              # (UNITS:  HRS)
 
 # READ IN NECESSARY CSV FILES
 allShiftsDF = pd.read_csv("csv/schedules/" + schedule + ".csv", sep=";", index_col=None)
@@ -33,43 +29,40 @@ breaksDF = breaksDF.loc[breaksDF.id == hasBreak]
 fleetDF = pd.read_csv("csv/fleetData.csv", sep=";", index_col=None)
 fleetData = fleetDF.loc[fleetDF.index == fleetType]
 
-# dumbDF, dumbRC, dumbCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-#                         dumbCharge)
+dumbDF, dumbRC, dumbCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
+                        dumbCharge)          
 
-# leaveTDF, leaveTRC, leaveTCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-#                         smartCharge_leavetime)
+leaveTDF, leaveTRC, leaveTCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
+                        smartCharge_leavetime)
 
-# battDF, battRC, battCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-#                         smartCharge_batt)
+battDF, battRC, battCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
+                        smartCharge_batt)
 
-# smartDF, smartRC, smartCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-#                         smartCharge_battOverLeavetime)
-
-# costDF, costRC, costCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-#                         costSensitiveCharge)
-# styleDF(costDF).to_excel('predictive_charging_test_result/costSensitiveCharge_shift5.xlsx')
+smartDF, smartRC, smartCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
+                        smartCharge_battOverLeavetime)
 
 costDF, costRC, costCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-                        predictiveCharging)
-# styleDF(costDF).to_excel('predictive_charging_test_result/predictiveCharging_shift5_test.xlsx')
+                        costSensitiveCharge)
+
+# costDF, costRC, costCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
+#                         predictiveCharging)
 
 # costDF, costRC, costCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
 #                         predictiveCharging2)
-# styleDF(costDF).to_excel('predictive_charging_test_result/predictiveCharging2_shift5.xlsx')
 
 # ###############################################################
 # # SAVE TO EXCEL (ONLY RUN WHEN ALL ALGORITHMS ARE UNCOMMENTED)
 # # NOTE: CREATE AN OUTPUT FOLDER FIRST
 # ###############################################################
 # # open writer
-# writer = pd.ExcelWriter(outputFolder + "fleet" + str(fleetType) + "_case1.xlsx")
+# writer = pd.ExcelWriter(outputFolder + "fleet" + str(fleetType) + "_case5.xlsx")
 # # write files
 # styleDF(dumbDF).to_excel(writer, sheet_name="dumb")
 # styleDF(leaveTDF).to_excel(writer, sheet_name="leavetime")
