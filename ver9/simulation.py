@@ -7,17 +7,17 @@ from stylingFunctions import styleDF
 from graphFunctions import *
 
 # SELECT PARAMETERS
-outputFolder = "results_test/"
+outputFolder = "static/"
 company = "BritishGas"
 mpkw = "HighMpkwLowSD"
-schedule = "shift3"
+schedule = "shift5"
 hasBreak = 0
-fleetType = 12
+fleetType = 6
 rcDuration = 0.5                            # RAPID CHARGE DURATION (HRS)
 rcPerc = 20                                 # WHAT PERCENTAGE TO START RAPID CHARGING (%)
 rcRate = 50                                 # RATE OF RAPID CHARGING (KW/HR)
-startTime = readTime("2019-01-01 06:00:00") # (FORMAT: DATETIME)
 runTime = 24*5                              # (UNITS:  HRS)
+startTime = readTime("2019-01-01 06:00:00") # (FORMAT: DATETIME)
 
 # READ IN NECESSARY CSV FILES
 allShiftsDF = pd.read_csv("csv/schedules/" + schedule + ".csv", sep=";", index_col=None)
@@ -29,33 +29,26 @@ breaksDF = breaksDF.loc[breaksDF.id == hasBreak]
 fleetDF = pd.read_csv("csv/fleetData.csv", sep=";", index_col=None)
 fleetData = fleetDF.loc[fleetDF.index == fleetType]
 
-dumbDF, dumbRC, dumbCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-                        dumbCharge)          
+# dumbDF, dumbRC, dumbCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, dumbCharge)
 
-leaveTDF, leaveTRC, leaveTCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-                        smartCharge_leavetime)
+# leaveTDF, leaveTRC, leaveTCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_leavetime)
 
-battDF, battRC, battCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-                        smartCharge_batt)
+# battDF, battRC, battCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_batt)
 
-smartDF, smartRC, smartCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-                        smartCharge_battOverLeavetime)
-
-costDF, costRC, costCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-                        costSensitiveCharge)
+# smartDF, smartRC, smartCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_battOverLeavetime)
 
 # costDF, costRC, costCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-#                         predictiveCharging)
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, costSensitiveCharge)
 
-# costDF, costRC, costCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF,
-#                         predictiveCharging2)
+# extraDF, extraRC, extraCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, extraCharge)
+
+# predictDF, predictRC, predictCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, predictiveCharge)
 
 # ###############################################################
 # # SAVE TO EXCEL (ONLY RUN WHEN ALL ALGORITHMS ARE UNCOMMENTED)

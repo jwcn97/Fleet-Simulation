@@ -245,7 +245,7 @@ def costSensitiveCharge(time, carDataDF, depot, shiftsByCar, availablePower, cha
         # IF LOW TARIFF ZONE HASN'T STARTED YET,
         # AND IF CAR WILL BE CHARGING THROUGHOUT WHOLE OF LOW TARIFF ZONE:
         if (time < lowTariffStart) and (nextStart >= lowTariffEnd):
-            # DELAY CHARGING UNTIL LOW TARIFF ZONE
+            # DELAY CHARGING UNTIL LOW TARIFF ZONE STARTS
             prior = 0.0
 
         # LET PRIORITY = BATTLEFT/TIME LEFT, APPEND TO LIST
@@ -262,7 +262,7 @@ def costSensitiveCharge(time, carDataDF, depot, shiftsByCar, availablePower, cha
     return carDataDF
 
 ##############################################
-# INCREASE BATT DURING CHARGE (PREDICTIVE)
+# INCREASE BATT DURING CHARGE (EXTRA)
 ##############################################
 # PRIORITY = BATT NEEDED/TIME LEFT IN DEPOT
 # THERE WILL BE A FUNCTION (READ EXTRA CHARGING) TO LOOK INTO NEXT LOW TARIFF ZONE AND SEE WHETHER VEHICLES NEED EXTRA CHARGING
@@ -270,7 +270,7 @@ def costSensitiveCharge(time, carDataDF, depot, shiftsByCar, availablePower, cha
 #   IT WILL ALSO RETURN THE TIME VEHICLES NEED TO CHARGE
 # CHARGE VEHICLE WHEN THE TIME COMES
 # CHARGE RATE = (PRIORITY/SUM OF ALL PRIORITIES)*AVAILABLE POWER
-def predictiveCharging(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange):
+def extraCharge(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange):
     # DEFINE NEXT LOW TARIFF ZONE
     lowTariffStart, lowTariffEnd = nextLowTariffZone(time, pricesDF)
 
@@ -293,7 +293,7 @@ def predictiveCharging(time, carDataDF, depot, shiftsByCar, availablePower, char
         # AND IF CAR WILL BE CHARGING THROUGHOUT WHOLE OF LOW TARIFF ZONE
         # AND IF VEHICLE IS STILL WAITING FOR THE EXTRA CHARGING:
         if (time < lowTariffStart) and (nextStart > lowTariffStart) and (eventChange[1] != "extraCharging"):
-            # DELAY CHARGING UNTIL LOW TARIFF ZONE
+            # DELAY CHARGING UNTIL IT'S TIME TO EXTRA CHARGE
             prior = 0.0
 
         # LET PRIORITY = BATTLEFT/TIME LEFT, APPEND TO LIST
@@ -309,7 +309,7 @@ def predictiveCharging(time, carDataDF, depot, shiftsByCar, availablePower, char
 
     return carDataDF
 
-def predictiveCharging2(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange):
+def predictiveCharge(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange):
     # DEFINE NEXT LOW TARIFF ZONE
     lowTariffStart, lowTariffEnd = nextLowTariffZone(time, pricesDF)
     

@@ -33,7 +33,7 @@ def labelTickers(startTime, modulo):
 ##################################################
 def compareCars(folder, name, sim, algo, total_cars, company):
     testDF = DFFunction(sim, 'car')
-    fig, ax = plt.subplots(figsize=(60,6))
+    fig, ax = plt.subplots(figsize=(60,total_cars+2))
     
     for cars in range(total_cars):
         ax.scatter(testDF.index, np.ones(len(testDF.index))*cars, 
