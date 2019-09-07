@@ -1,0 +1,61 @@
+{% extends "layout.html" %}
+{% block content %}
+  <div class="home">
+      <!-- SECTION 1 -->
+      <h2>Inputs and Limitations</h2>
+
+        <form method="POST">
+          Company*:
+            <select name="company">
+              {% for comp in companies %}
+                <option value="{{comp}}" SELECTED>{{comp}}</option>
+              {% endfor %}
+            </select><br><br>
+    
+          Schedule*: 
+            <select name="schedule">
+              {% for shift in shifts %}
+                <option value="{{shift}}" SELECTED>{{shift}}</option>
+              {% endfor %}
+            </select><br><br>
+    
+          Fleet Type*:
+            <select name="fleetType">
+              {% for fleet in fleetTypes %}
+                <option value="{{fleet}}" SELECTED>{{fleet}}</option>
+              {% endfor %}
+            </select><br><br>
+    
+          Minimum Percentage Needed to Rapid Charge (%): <input type="text" name="rcPerc" value="20"><br><br>
+    
+          Rapid Charge Duration (Hrs): <input type="text" name="rcDuration" value="0.5"><br><br>
+    
+          Rapid Charge Rate (kW/Hr): <input type="text" name="rcRate" value="50"><br><br>
+    
+          Run Time (Hrs): <input type="text" name="runTime" value="120"><br><br>
+    
+          <input type="submit" value="Submit">
+        </form>
+  
+      <!-- SECTION 2 -->
+      <h2>Results</h2>
+  
+        <p>{{rapid_charges}}</p>
+        <p>{{cost}}</p>
+    
+        <img src="{{ url_for('static', filename='results_extra_charge.png') }}" width="2300", height="300"/>
+  
+      <!-- SECTION 3-->
+      <h2>Effects of Changing Parameters</h2>
+
+        <p>e.g. effect or reducing CPs -> saves ££</p>
+  
+      <!-- SECTION 4 -->
+      <h2>Suggestions and Reasons</h2>
+      
+        <p>What would be the best parameters to yield the least cost</p>
+        <p>RC_percentage => </p>
+        <p>RC_duration => </p>
+        <p>optimal charging methodology => </p>
+  </div>
+{% endblock %}
