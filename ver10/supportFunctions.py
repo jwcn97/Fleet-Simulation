@@ -81,30 +81,54 @@ def nextLowTariffZone(time, pricesDF):
 def getData(df, col):
     return df[col].values[0]
 
-# GENERATE CAR DATA AND CHARGE POINT DATA
-def getLists(df):
+# GENERATE CARDATADF, CHARGEPTDF AND SIMULATIONDF
+def generateDF(df, latLongData, carCols, cpCols, simCols, latLongCols):
     # initialise charge points data
     chargePt_data = []
     for (rate,quantity) in eval(getData(df, 'chargePts')):
         # [maxRate, inUse]
         chargePt_data += [[rate,1]]*quantity
 
+    # get lat and long of depot and first destination
+    (depotLat, depotLong) = eval(getData(df, 'depotCoord'))
+
     # initialise car data
     car_data = []
     for (size,quantity) in eval(getData(df, 'cars')):
         # [inDepot, battSize, battkW,
-        #  lat, long
-        #  chargePt, chargeRate,
+        #  lat, long, destLat, destLong, destIndex
+        #  chargePt, chargeRate, totalCost, totalDistance, 
         #  rcCount, rcChunks,
         #  shiftIndex, latestStartShift, latestEndShift]
-        car_data += [[1,size,size,0,0,np.nan,0,0,0,-1,np.nan,np.nan]]*quantity
+        car_data += [[1, size, size,
+                    depotLat, depotLong, np.nan, np.nan, 0,
+                    np.nan, 0.0, 0.0, 0.0,
+                    0, 0,
+                    -1, np.nan, np.nan]]*quantity
+
+    # initialise dataframes
+    carDataDF = pd.DataFrame.from_records(car_data, columns=carCols)
+    chargePtDF = pd.DataFrame.from_records(chargePt_data, columns=cpCols)
+    simulationDF = pd.DataFrame(columns=simCols)
     
     # assign available charge points to cars
     for cp_id in range(len(chargePt_data)):
-        size = car_data[cp_id][2]
-        car_data[cp_id] = [1,size,size,0,0,cp_id,0,0,0,-1,np.nan,np.nan]
+        carDataDF.loc[cp_id, 'chargePt'] = cp_id
+    
+    # set latitude and longitude of vehicles and setup latLongDF
+    latLongDF = pd.DataFrame(columns=latLongCols)
+    for car in range(len(carDataDF)):
+        carDataDF.loc[car,'destLat'] = eval(latLongData.loc[car,'destinationCoord'])[0][0]
+        carDataDF.loc[car,'destLong'] = eval(latLongData.loc[car,'destinationCoord'])[0][1]
 
-    return car_data, chargePt_data
+        destinations = eval(latLongData.loc[car,'destinationCoord'])
+        destinations.append((depotLat, depotLong))
+        latLongDF = latLongDF.append({
+            "car": car,
+            "destinations": destinations
+        },ignore_index=True)        
+
+    return carDataDF, chargePtDF, simulationDF, latLongDF
 
 # CHOOSE MAX TOTAL COST OF THE ROW
 def adjustTotalCost(time, simulationDF):
@@ -178,7 +202,7 @@ def unpackShifts(carData, allShiftsDF):
 ##############################################
 
 # IMPLEMENT CHANGES AT START AND END OF SHIFTS
-def inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, eventChange):
+def inOutDepot(time, carDataDF, shiftsByCar, depot, latLongDF, chargePtDF, eventChange):
     # WHEN SHIFT STARTS:
         # Remove from depot
         # Let inDepot = 0 in carDataDF
@@ -190,13 +214,21 @@ def inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, eventChange):
 
     # FOR EVERY CAR:
     for car in range(0, len(carDataDF)):
-        
+        destinations = latLongDF.loc[car, 'destinations']
+
         # ***** CHECK IF CAR IS AT THE END OF A SHIFT *****
         # IF TIME == END TIME OF CURRENT SHIFT:
         if str(time) == carDataDF.loc[car, 'latestEndShift']:
             # ENTER DEPOT
             carDataDF.loc[car,'inDepot'] = 1
             depot.append(car)
+
+            # RESET LATITUDES AND LONGITUDES
+            carDataDF.loc[car,'destIndex'] = 0
+            carDataDF.loc[car,'destLat'] = destinations[carDataDF.loc[car,'destIndex']][0]
+            carDataDF.loc[car,'destLong'] = destinations[carDataDF.loc[car,'destIndex']][1]
+            carDataDF.loc[car,'lat'] = destinations[-1][0]
+            carDataDF.loc[car,'long'] = destinations[-1][1]
 
             # RECOGNISE AN EVENT HAS HAPPENED
             eventChange = (True, "enterDepot")
@@ -225,14 +257,12 @@ def inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, eventChange):
                 # REMOVE CHARGE PT IN CAR DATA DF
                 carDataDF.loc[car,'chargePt'] = np.nan
 
-                # RESET RCCHUNKS COUNT and CHARGE RATE
+                # UPDATE PARAMETERS IN CARDATADF
                 carDataDF.loc[car,'rcChunks'] = 0
                 carDataDF.loc[car,'chargeRate'] = 0
-
-                # UPDATE SHIFT DATA IN CAR DATA DF
-                carDataDF.loc[car, 'shiftIndex'] = shiftIndex + 1
-                carDataDF.loc[car, 'latestStartShift'] = nextStartShift
-                carDataDF.loc[car, 'latestEndShift'] = nextEndShift
+                carDataDF.loc[car,'shiftIndex'] = shiftIndex + 1
+                carDataDF.loc[car,'latestStartShift'] = nextStartShift
+                carDataDF.loc[car,'latestEndShift'] = nextEndShift
 
                 # RECOGNISE AN EVENT HAS HAPPENED
                 eventChange = (True, "exitDepot")
@@ -240,7 +270,7 @@ def inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, eventChange):
     return eventChange, carDataDF, depot, chargePtDF
 
 # READ CARS WITH FULL BATTERY INTO SIMULATION DF
-def readFullBattCars(time, carDataDF, simulationDF, totalCost, eventChange):
+def readFullBattCars(time, carDataDF, simulationDF, eventChange):
     # SELECT VEHICLES IN THE DEPOT WITH FULL BATTERY
     chargeDF = carDataDF.loc[carDataDF['inDepot'] == 1]
     fullBattDF = chargeDF.loc[chargeDF['battkW'] == chargeDF['battSize']]
@@ -389,7 +419,10 @@ def priorityCharge(priorities, availablePower, carDataDF, chargePtDF):
     return carDataDF
 
 # CHARGE VEHICLE FOR ONE HOUR
-def charge(time, carDataDF, depot, simulationDF, pricesDF, totalCost):
+def charge(time, carDataDF, depot, simulationDF, pricesDF):
+    # GET TOTAL COST OF ALL VEHICLES
+    totalCost = carDataDF['totalCost'].sum()
+
     # FOR EVERY CAR IN THE DEPOT
     for index in range(len(depot)):
         car = depot[index]
@@ -439,7 +472,11 @@ def charge(time, carDataDF, depot, simulationDF, pricesDF, totalCost):
         # ASSIGN UPDATED BATTERY KW
         carDataDF.loc[car, 'battkW'] = batt + chargeRate/chunks
 
-    return carDataDF, simulationDF, totalCost
+        # ASSIGN UPDATED TOTAL COST
+        carTotalCost = carDataDF.loc[car, 'totalCost']
+        carDataDF.loc[car, 'totalCost'] = carTotalCost + costOfCharge
+
+    return carDataDF, simulationDF
 
 
 #############################################

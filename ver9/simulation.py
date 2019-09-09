@@ -8,8 +8,8 @@ from graphFunctions import *
 
 # SELECT PARAMETERS
 outputFolder = "results/"
-company = "BritishGas"
-schedule = "shift1"
+company = "BritishGas_test"
+schedule = "shift3"
 hasBreak = 0
 fleetType = 0
 rcDuration = 0.5                            # RAPID CHARGE DURATION (HRS)
@@ -20,7 +20,7 @@ startTime = readTime("2019-01-01 06:00:00") # (FORMAT: DATETIME)
 
 # READ IN NECESSARY CSV FILES
 allShiftsDF = pd.read_csv("csv/schedules/" + schedule + ".csv", sep=";", index_col=None)
-drivingDF = pd.read_csv("csv/driving/LowMpkwLowSD.csv", sep=";", index_col=None)
+drivingDF = pd.read_csv("csv/driving/HighMpkwLowSD.csv", sep=";", index_col=None)
 pricesDF = pd.read_csv("csv/prices.csv", sep=";", index_col=None)
 pricesDF = pricesDF.loc[pricesDF.company == company]
 breaksDF = pd.read_csv("csv/breaks.csv", sep=";", index_col=None)
@@ -74,7 +74,7 @@ resultDF = pd.DataFrame(columns=['dumbRC','leaveTRC','battRC','smartRC','costRC'
 # # NOTE: CREATE AN OUTPUT FOLDER FIRST
 # ###############################################################
 # # open writer
-# writer = pd.ExcelWriter(outputFolder + "fleet" + str(fleetType) + "_case5.xlsx")
+# writer = pd.ExcelWriter(outputFolder + "fleet" + str(fleetType) + "_case5_britishgastest.xlsx")
 # # write files
 # styleDF(dumbDF).to_excel(writer, sheet_name="dumb")
 # styleDF(leaveTDF).to_excel(writer, sheet_name="leavetime")
