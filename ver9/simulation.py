@@ -9,9 +9,9 @@ from graphFunctions import *
 # SELECT PARAMETERS
 outputFolder = "results/"
 company = "BritishGas"
-schedule = "shift3"
+schedule = "shift1"
 hasBreak = 0
-fleetType = 12
+fleetType = 0
 rcDuration = 0.5                            # RAPID CHARGE DURATION (HRS)
 rcPerc = 20                                 # WHAT PERCENTAGE TO START RAPID CHARGING (%)
 rcRate = 50                                 # RATE OF RAPID CHARGING (KW/HR)
@@ -20,7 +20,7 @@ startTime = readTime("2019-01-01 06:00:00") # (FORMAT: DATETIME)
 
 # READ IN NECESSARY CSV FILES
 allShiftsDF = pd.read_csv("csv/schedules/" + schedule + ".csv", sep=";", index_col=None)
-drivingDF = pd.read_csv("csv/driving/HighMpkwLowSD.csv", sep=";", index_col=None)
+drivingDF = pd.read_csv("csv/driving/LowMpkwLowSD.csv", sep=";", index_col=None)
 pricesDF = pd.read_csv("csv/prices.csv", sep=";", index_col=None)
 pricesDF = pricesDF.loc[pricesDF.company == company]
 breaksDF = pd.read_csv("csv/breaks.csv", sep=";", index_col=None)
@@ -46,9 +46,8 @@ resultDF = pd.DataFrame(columns=['dumbRC','leaveTRC','battRC','smartRC','costRC'
 # costDF, costRC, costCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, costSensitiveCharge)
 
-costDF2, costRC2, costCost2 = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, costSensitiveCharge2)
-styleDF(costDF2).to_excel(outputFolder + "fleet" + str(fleetType) + "_case5_cost.xlsx")
+# costDF2, costRC2, costCost2 = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, costSensitiveCharge2)
 
 # extraDF, extraRC, extraCost = runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, extraCharge)

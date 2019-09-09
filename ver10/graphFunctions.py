@@ -3,7 +3,7 @@ import numpy as np
 import datetime as dt
 import time
 import matplotlib.pyplot as plt
-from chargingFunctions import chunks
+from chunks import chunks
 
 # get simulationDF of a single car (for different algorithms)
 def getCarDF(df, algo, car):

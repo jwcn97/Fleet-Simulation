@@ -1,12 +1,6 @@
 import pandas as pd
 import numpy as np
-import datetime as dt
-import time
-
-# CHOOSE NUMBER OF CHUNKS IN AN HOUR
-#   e.g. 3 chunks would divide the hour into 20-min shifts
-chunks = 4
-
+from chunks import chunks
 from supportFunctions import *
 
 #################################
@@ -417,79 +411,3 @@ def predictiveCharge(time, carDataDF, depot, shiftsByCar, availablePower, charge
     carDataDF = priorityCharge(leaveTimes, availablePower, carDataDF, chargePtDF)
 
     return carDataDF
-
-#################################################################################################################################
-
-############################################
-# RUN SIMULATION FROM SEPARATE FILE
-############################################
-def runSimulation(startTime, runTime, rcDuration, rcPerc, rcRate, 
-                  fleetData, driveDataDF, allShiftsDF, breaksDF, pricesDF,
-                  algo):
-
-    # INITIALISE MAIN DATAFRAMES WITH DATA AT START TIME
-    #   Get data from csv inputs
-    carData, chargePtData = getLists(fleetData)
-
-    #   Choose column names
-    carCols = ["battkW","inDepot","battSize","chargePt","chargeRate","rcChunks","shiftIndex","latestStartShift","latestEndShift"]
-    cpCols = ["maxRate","inUse"]
-    simCols = ["time","car","chargeDiff","batt","event","costPerCharge","totalCost"]
-
-    #   Initialise dataframes
-    carDataDF = pd.DataFrame.from_records(carData, columns=carCols)
-    chargePtDF = pd.DataFrame.from_records(chargePtData, columns=cpCols)
-    simulationDF = pd.DataFrame(columns=simCols)
-
-    depot = []
-    driveDataByCar = {}
-    for car in range(0, len(carDataDF)):
-        # APPEND CARS INTO DEPOT AT START TIME
-        if carDataDF.loc[car,'inDepot']: depot.append(car)
-        # CREATE LIBRARY FOR DRIVING DATA
-        findData = driveDataDF.loc[driveDataDF['car']==car]
-        dataNoIndex = findData.reset_index(drop=True)
-        driveDataByCar['%s' % car] = dataNoIndex
-    
-    # CREATE LIBRARY FOR SHIFTS BY CAR
-    shiftsByCar = unpackShifts(carDataDF, allShiftsDF)
-    # RETRIEVE AVAILABLE POWER FROM FLEET DATA
-    availablePower = getData(fleetData, 'availablePower')
-
-    rcCount = 0             # INITIALISE A COUNTER FOR RAPID CHARGES
-    totalCost = 0           # INITIALISE A COUNTER FOR TOTAL COST
-    time = startTime        # CHOOSE START TIME
-
-    # RUN SIMULATION FOR ALL OF RUN TIME
-    for i in range(0, runTime*chunks):
-        # INITIALISE A VARIABLE TO CHECK FOR EVENT CHANGES
-        eventChange = (False, None)
-
-        # *** RUN FUNCTIONS THAT INCLUDE WILL RECOGNISE CHANGES IN EVENTS ***
-        eventChange, carDataDF, depot, chargePtDF = inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, eventChange)
-        eventChange, carDataDF = readFullBattCars(time, carDataDF, simulationDF, totalCost, eventChange)
-        eventChange = readTariffChanges(time, pricesDF, eventChange)
-        eventChange = readExtraCharging(time, pricesDF, depot, carDataDF, shiftsByCar, availablePower, eventChange)
-
-        # *** RUN FUNCTIONS AFFECTING CARS OUTSIDE THE DEPOT ***
-        # DECREASE BATT/RAPID CHARGE CARS OUTSIDE THE DEPOT
-        carDataDF, rcCount, simulationDF, totalCost = driving(time, carDataDF, driveDataByCar, breaksDF, 
-                                                            rcCount, rcDuration, rcPerc, rcRate, 
-                                                            simulationDF, i, totalCost)
-
-        # *** RUN FUNCTIONS AFFECTING CARS IN THE DEPOT ***
-        # IF THERE IS AN EVENT and THERE ARE CARS THAT REQUIRE CHARGING
-        # RUN CHARGING ALGORITHM
-        if (eventChange[0] == True) and (len(depot) > 0):
-            carDataDF = algo(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange)
-
-        # CHARGE/READ WAITING CARS IN THE DEPOT
-        carDataDF, simulationDF, totalCost = charge(time, carDataDF, depot, simulationDF, pricesDF, totalCost)
-
-        # FORMAT TOTAL COST COLUMN IN SIMULATION DF
-        simulationDF = adjustTotalCost(time, simulationDF)
-
-        # INCREMENT TIME OF SIMULATION
-        time = incrementTime(time)
-
-    return simulationDF, rcCount, totalCost
