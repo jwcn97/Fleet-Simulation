@@ -6,6 +6,10 @@ import time
 from chunks import chunks
 from supportFunctions import *
 
+#######################################
+# LAT AND LONG FUNCTIONS
+#######################################
+
 # CALCULATE BEARING BETWEEN TWO POINTS
 #   POINT A, POINT B IN THE FORM OF TUPLES
 def calculateBearing(pointA, pointB):
@@ -85,11 +89,60 @@ def latLongToMiles(lat1, long1, lat2, long2):
     # in your favorite set of units to get length.
     return arc*3960
 
+# UPDATE THE LAT AND LONG OF VEHICLE WHILE DRIVING
+#   distance = distance going to be travelled by vehicle in this time slot
+#   (dependent on number of chunks)
+def updateLatLong(car, carDataDF, latLongDF, distance):
+    # GET ALL DESTINATIONS OF VEHICLE
+    destinations = latLongDF.loc[car,'destinations']
+    # GET INDEX OF NEXT DESTINATION
+    destIndex = carDataDF.loc[car, 'destIndex']
+    # GET LATITUDE AND LONGITUDE PARAMETERS
+    currLat, currLong = carDataDF.loc[car, 'lat'], carDataDF.loc[car, 'long']
+    destLat, destLong = carDataDF.loc[car, 'destLat'], carDataDF.loc[car, 'destLong']
+
+    # CALCULATE BEARING OR DIRECTION OF TRAVEL
+    bearing = calculateBearing((currLat, currLong),(destLat, destLong))
+    # CALCULATE NEXT LATITUDE AND LONGITUDE FOR NEXT TIME FRAME
+    newLat, newLong = milesToLatLong(currLat, currLong, bearing, distance)
+
+    # IF LATITUDE PASSES BY DESTINATION LATITUDE
+    #   VEHICLE HAS REACHED ITS INTENDED DESTINATION
+    if (currLat < destLat < newLat) or (newLat < destLat < currLat):
+        newLat, newLong = destLat, destLong
+
+        # ENSURE THE CYCLE REPEATS
+        destIndex = (destIndex + 1) % len(destinations)
+
+        # ASSIGNS DESTINATION LATITUDE AND LONGITUDE
+        carDataDF.loc[car,'destIndex'] = destIndex
+        carDataDF.loc[car,'destLat'] = destinations[destIndex][0]
+        carDataDF.loc[car,'destLong'] = destinations[destIndex][1]
+    
+    carDataDF.loc[car,'lat'] = newLat
+    carDataDF.loc[car,'long'] = newLong
+
+    return carDataDF
+
+
+##################################################
+# FUNCTIONS WHICH SUPPORT DRIVING
+##################################################
+
+# CHECK WHETHER IT IS A NON CHARGING BREAK
+def breakTime(time, breaksDF):
+    breakStart = getData(breaksDF, 'startBreak')
+    breakEnd = getData(breaksDF, 'endBreak')
+
+    if not breakStart == "None":
+        if readTime(breakStart) <= time.time() < readTime(breakEnd):
+            return True
+
 # CHECK WHETHER VEHICLES REQUIRE RAPID CHARGE
 #   UPDATE RAPID CHARGE CHUNKS IN CARDATADF and UPDATE RCCOUNT
-def checkRC(carDataDF, rcDuration, rcPerc):
-    # FIND CARS OUTSIDE OF DEPOT
-    drivingCarsDF = carDataDF.loc[carDataDF["inDepot"]==0]
+def checkRC(carDataDF, drivingCarsDF, rcDuration, rcPerc):
+    # FIND DURATION OF RAPID CHARGE IN CHUNKS
+    rcChunks = int(np.ceil(rcDuration * chunks))
 
     # FOR CARS OUTSIDE OF DEPOT:
     #   * CHECK FOR CARS CURRENTLY RAPID CHARGING
@@ -97,8 +150,9 @@ def checkRC(carDataDF, rcDuration, rcPerc):
     for row in range(len(drivingCarsDF)):
         car = drivingCarsDF.index[row]
 
-        # FIND DURATION OF RAPID CHARGE IN CHUNKS
-        rcChunks = int(np.ceil(rcDuration * chunks))
+        # GET BATTERY AND BATTERY SIZE
+        batt = carDataDF.loc[car, 'battkW']
+        battSize = carDataDF.loc[car, 'battSize']
         # GET THE RAPID CHARGE STATUS OF VEHICLE
         chunkCount = carDataDF.loc[car, 'rcChunks']
 
@@ -107,297 +161,201 @@ def checkRC(carDataDF, rcDuration, rcPerc):
             # INCREMENT RAPID CHARGE CHUNKS COUNT
             carDataDF.loc[car, 'rcChunks'] += 1
 
-        # ELSE (CAR HAS NOT BEEN RAPID CHARGING), CHECK IF CAR NEEDS RAPID CHARGING
-        else:
-            batt = carDataDF.loc[car, 'battkW']
-            battSize = carDataDF.loc[car, 'battSize']
-            # IF BATTERY < RC PERCENTAGE (INPUT), CAR NEEDS RAPID CHARGING
-            if batt < (battSize*(rcPerc/100)):
-                # INCREMENT RAPID CHARGE CHUNKS COUNT
-                carDataDF.loc[car, 'rcChunks'] += 1
-                # INCREASE RAPID CHARGE COUNT
-                carDataDF.loc[car, 'rcCount'] += 1
+        # IF CAR HAS NOT BEEN RAPID CHARGING, BUT NEEDS RAPID CHARGING (BATTERY < RC PERCENTAGE):
+        elif batt < (battSize*(rcPerc/100)):
+            # INCREMENT RAPID CHARGE CHUNKS COUNT
+            carDataDF.loc[car, 'rcChunks'] += 1
+            # INCREASE RAPID CHARGE COUNT
+            carDataDF.loc[car, 'rcCount'] += 1
 
-            # OTHERWISE, RESET RAPID CHARGE CHUNKS COUNT
-            else: carDataDF.loc[car, 'rcChunks'] = 0
+        # IF CAR HAS NOT BEEN RAPID CHARGING AND DOESN'T NEED RAPID CHARGING:
+        else:
+            # RESET RAPID CHARGE CHUNKS COUNT
+            carDataDF.loc[car, 'rcChunks'] = 0
     
-    return carDataDF, drivingCarsDF
+    return carDataDF
+
+# DECREASE BATTERY WHILE DRIVING NORMALLY
+def decreaseBatt(car, carDataDF, driveDataByCar, ind, nonChargingBreak, latLongDF):
+    # READ PARAMETERS
+    batt = carDataDF.loc[car, 'battkW']
+    battSize = carDataDF.loc[car, 'battSize']
+    drivingValues = driveDataByCar['0'].shape[0]
+
+    # GET VALUE FOR MILEAGE AND MPKW
+    if nonChargingBreak: mileage = 0
+    else:                mileage = driveDataByCar[str(car % 4)].loc[ind % drivingValues, 'mileage']
+    mpkw = driveDataByCar[str(car % 4)].loc[ind % drivingValues, 'mpkw']
+
+    # CALCULATE RATE OF BATT DECREASE
+    kwphr = mileage/mpkw
+
+    # UPDATE LAT AND LONG OF VEHICLE WHILE DRIVING
+    carDataDF = updateLatLong(car, carDataDF, latLongDF, mileage/chunks)
+
+    # SET INPUTS FOR SIMULATION DF
+    chargeDiff = round(-kwphr/chunks, 1)
+    costPerCharge = 0
+
+    # UPDATE BATTERY AND TOTAL DISTANCE OF CAR (IN MILES)
+    carDataDF.loc[car,'battkW'] = batt - (kwphr/chunks)
+    carDataDF.loc[car, 'totalDistance'] += (mileage/chunks)
+
+    return carDataDF, kwphr, chargeDiff, costPerCharge
+
+# RAPID CHARGE VEHICLE
+def rapidCharge(car, carDataDF, rcRate, rcPrice, totalCost):
+    # READ BATTERY and BATTERY SIZE
+    batt = carDataDF.loc[car, 'battkW']
+    battSize = carDataDF.loc[car, 'battSize']
+
+    # CALCULATE BATTERY INCREASE
+    if batt + rcRate/chunks > battSize: RCbattIncrease = battSize - batt
+    else:                               RCbattIncrease = rcRate/chunks
+
+    # UPDATE RAPID CHARGE COUNT AND TOTAL COST
+    rcCost = rcPrice * RCbattIncrease
+    totalCost += rcCost
+
+    # UPDATE BATTERY AND TOTAL COST
+    carDataDF.loc[car,'battkW'] = batt + RCbattIncrease
+    carDataDF.loc[car,'totalCost'] += rcCost
+
+    # SET INPUTS FOR SIMULATION DF
+    chargeDiff = round(RCbattIncrease, 1)
+    costPerCharge = round(rcCost, 2)
+
+    return carDataDF, totalCost, chargeDiff, costPerCharge
+
 
 #########################################################################
 # LOOK AT CARS OUTSIDE THE DEPOT
 #   FOR CARS THAT NEED RAPID CHARGING: RAPID CHARGE
 #   FOR CARS THAT DON'T NEED RAPID CHARGING: DECREASE BATT
 #########################################################################
-def constantDriving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, simulationDF, ind):
+def driving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, simulationDF, ind):
     # EXTRACT RAPID CHARGE DATA
     rcPrice = getData(rcData, 'rcPrice')        # PRICE PER KW OF RAPID CHARGE (£ PER KW)
     rcDuration = getData(rcData, 'rcDuration')  # RAPID CHARGE DURATION (HRS)
     rcPerc = getData(rcData, 'rcPerc')          # WHAT PERCENTAGE TO START RAPID CHARGING (%)
     rcRate = getData(rcData, 'rcRate')          # RATE OF RAPID CHARGING (KW/HR)
 
+    # FIND CARS OUTSIDE OF DEPOT
+    drivingCarsDF = carDataDF.loc[carDataDF["inDepot"]==0]
+
     # UPDATE RAPID CHARGE CHUNKS IN CARDATADF and UPDATE RCCOUNT
-    carDataDF, drivingCarsDF = checkRC(carDataDF, rcDuration, rcPerc)
+    carDataDF = checkRC(carDataDF, drivingCarsDF, rcDuration, rcPerc)
 
     # GET OTHER PARAMETERS
     drivingValues = driveDataByCar['0'].shape[0]
-    breakStart = getData(breaksDF, 'startBreak')
-    breakEnd = getData(breaksDF, 'endBreak')
+    nonChargingBreak = breakTime(time, breaksDF)
     totalCost = carDataDF['totalCost'].sum()
 
     for rows in range(len(drivingCarsDF)):
         car = drivingCarsDF.index[rows]
 
-        # READ BATTERY and BATTERY SIZE
+        # READ BATTERY
         batt = carDataDF.loc[car, 'battkW']
-        battSize = carDataDF.loc[car, 'battSize']
         
-        # ***** FOR CARS THAT DON'T NEED RAPID CHARGING, DECREASE BATT (DRIVE) *****
+        # ***** FOR CARS THAT DON'T NEED RAPID CHARGING, DECREASE BATT *****
         if carDataDF.loc[car, 'rcChunks'] == 0:
-            # SET MILEAGE AND MPKW
-            mileage = 16
-            mpkw = 4
-
-            # UPDATE MILEAGE TO BE 0 DURING BREAK PERIOD
-            if not breakStart == "None":
-                if readTime(breakStart) <= time.time() < readTime(breakEnd):
-                    mileage = 0
-
-            # CALCULATE RATE OF BATT DECREASE
-            kwphr = mileage/mpkw
-
-            # UPDATE SIMULATION ACCORDINGLY
-            simulationDF = simulationDF.append({
-                'time': time,
-                'car': car,
-                'chargeDiff': round(-kwphr/chunks, 1),
-                'batt': round(batt, 1),
-                'event': 'drive' if not kwphr==0.0 else 'wait',
-                'costPerCharge': 0,
-                'totalCost': round(totalCost, 2)
-            }, ignore_index=True)
-
-            # DECREASE BATTERY and ASSIGN BATTERY
-            carDataDF.loc[car,'battkW'] = batt - (kwphr/chunks)
-            # ASSIGN UPDATED TOTAL DISTANCE OF CAR (IN MILES)
-            carDataDF.loc[car, 'totalDistance'] += (mileage/chunks)
+            # DECREASE BATTERY OF VEHICLE
+            carDataDF, kwphr, chargeDiff, costPerCharge = decreaseBatt(car, carDataDF, driveDataByCar, ind, nonChargingBreak, latLongDF)
+            # UPDATE RAPID CHARGE CHUNKS
+            carDataDF.loc[car,'rcChunks'] = 0
+            # UPDATE EVENT
+            event = 'wait' if kwphr == 0.0 else 'drive'
         
         # ***** FOR CARS THAT NEED RAPID CHARGING, RAPID CHARGE *****
         else:
-            # CALCULATE BATTERY INCREASE
-            if batt + rcRate/chunks > battSize: RCbattIncrease = battSize - batt
-            else:                               RCbattIncrease = rcRate/chunks
+            # RAPID CHARGE VEHICLE
+            carDataDF, totalCost, chargeDiff, costPerCharge = rapidCharge(car, carDataDF, rcRate, rcPrice, totalCost)
+            # LABEL EVENT
+            event = 'RC'
 
-            # UPDATE RAPID CHARGE COUNT AND TOTAL COST
-            rcCost = rcPrice * RCbattIncrease
-            totalCost += rcCost
-
-            # UPDATE SIMULATION ACCORDINGLY
-            simulationDF = simulationDF.append({
-                'time': time,
-                'car': car,
-                'chargeDiff': round(RCbattIncrease, 1),
-                'batt': round(batt, 1),
-                'event': 'RC',
-                'costPerCharge': round(rcCost, 2),
-                'totalCost': round(totalCost, 2)
-            }, ignore_index=True)
-
-            # RAPID CHARGE and ASSIGN BATTERY
-            carDataDF.loc[car,'battkW'] = batt + RCbattIncrease
-            # ASSIGN UPDATED TOTAL COST
-            carDataDF.loc[car, 'totalCost'] += rcCost
+        # UPDATE SIMULATION ACCORDINGLY
+        simulationDF = simulationDF.append({
+            'time': time,
+            'car': car,
+            'chargeDiff': chargeDiff,
+            'batt': round(batt, 1),
+            'event': event,
+            'costPerCharge': costPerCharge,
+            'totalCost': round(totalCost, 2)
+        }, ignore_index=True)
 
     return carDataDF, simulationDF
 
 #########################################################################
-# SIMILAR TO DRIVING FUNCTION (WITH VARIATIONS IN MILEAGE AND MPKW)
+# DOES NOT NECESSARILY RAPID CHARGE FOR THE SPECIFIED DURATION
+# ONLY RAPID CHARGE UNTIL IT IS ENOUGH TO REACH DEPOT
 #########################################################################
-def variedDriving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, simulationDF, ind):
+def rcSmartDriving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, simulationDF, ind):
     # EXTRACT RAPID CHARGE DATA
     rcPrice = getData(rcData, 'rcPrice')        # PRICE PER KW OF RAPID CHARGE (£ PER KW)
     rcDuration = getData(rcData, 'rcDuration')  # RAPID CHARGE DURATION (HRS)
     rcPerc = getData(rcData, 'rcPerc')          # WHAT PERCENTAGE TO START RAPID CHARGING (%)
     rcRate = getData(rcData, 'rcRate')          # RATE OF RAPID CHARGING (KW/HR)
 
-    # UPDATE RAPID CHARGE CHUNKS IN CARDATADF and UPDATE RCCOUNT
-    carDataDF, drivingCarsDF = checkRC(carDataDF, rcDuration, rcPerc)
+    # FIND CARS OUTSIDE OF DEPOT
+    drivingCarsDF = carDataDF.loc[carDataDF["inDepot"]==0]
 
     # GET OTHER PARAMETERS
     drivingValues = driveDataByCar['0'].shape[0]
-    breakStart = getData(breaksDF, 'startBreak')
-    breakEnd = getData(breaksDF, 'endBreak')
+    nonChargingBreak = breakTime(time, breaksDF)
     totalCost = carDataDF['totalCost'].sum()
 
     for rows in range(len(drivingCarsDF)):
         car = drivingCarsDF.index[rows]
 
-        # READ BATTERY and BATTERY SIZE
+        # READ VEHICLE PARAMETERS
         batt = carDataDF.loc[car, 'battkW']
         battSize = carDataDF.loc[car, 'battSize']
-        
-        # ***** FOR CARS THAT DON'T NEED RAPID CHARGING, DECREASE BATT (DRIVE) *****
-        if carDataDF.loc[car, 'rcChunks'] == 0:
-            # GET RANDOMISED VALUE FOR MILEAGE AND MPKW
-            mileage = driveDataByCar[str(car % 4)].loc[ind % drivingValues, 'mileage']
-            mpkw = driveDataByCar[str(car % 4)].loc[ind % drivingValues, 'mpkw']
+        rcChunks = carDataDF.loc[car,'rcChunks']
 
-            # UPDATE MILEAGE TO BE 0 DURING BREAK PERIOD
-            if not breakStart == "None":
-                if readTime(breakStart) <= time.time() < readTime(breakEnd):
-                    mileage = 0
+        # FIND HRS VEHICLE STILL NEEDS TO DRIVE
+        hrsLeft = (readTime(carDataDF.loc[car, 'latestEndShift']) - time).total_seconds()/3600
+        buffer = battSize * 5/100
+        kwphr = 4
+        battNeeded = hrsLeft*kwphr + buffer
 
-            # CALCULATE RATE OF BATT DECREASE
-            kwphr = mileage/mpkw
+        # IF CAR HAS BEEN RAPID CHARGING AND STILL NEEDS RAPID CHARGING
+        if (rcChunks > 0) and (batt < battNeeded < battSize):
+            # RAPID CHARGE VEHICLE
+            carDataDF, totalCost, chargeDiff, costPerCharge = rapidCharge(car, carDataDF, rcRate, rcPrice, totalCost)
+            # UPDATE RC PARAMETERS
+            carDataDF.loc[car,'rcChunks'] += 1
+            # LABEL EVENT
+            event = 'RC'
 
-            # UPDATE SIMULATION ACCORDINGLY
-            simulationDF = simulationDF.append({
-                'time': time,
-                'car': car,
-                'chargeDiff': round(-kwphr/chunks, 1),
-                'batt': round(batt, 1),
-                'event': 'drive' if not kwphr==0.0 else 'wait',
-                'costPerCharge': 0,
-                'totalCost': round(totalCost, 2)
-            }, ignore_index=True)
+        # IF CAR HASN'T BEEN RAPID CHARGING BUT NEEDS RAPID CHARGING
+        elif (batt < battSize*rcPerc/100) and (batt < battNeeded < battSize):
+            # RAPID CHARGE VEHICLE
+            carDataDF, totalCost, chargeDiff, costPerCharge = rapidCharge(car, carDataDF, rcRate, rcPrice, totalCost)
+            # UPDATE RC PARAMETERS
+            if rcChunks == 0: carDataDF.loc[car,'rcCount'] += 1
+            carDataDF.loc[car,'rcChunks'] += 1
+            # LABEL EVENT
+            event = 'RC'
 
-            # DECREASE BATTERY and ASSIGN BATTERY
-            carDataDF.loc[car,'battkW'] = batt - (kwphr/chunks)
-            # ASSIGN UPDATED TOTAL DISTANCE OF CAR (IN MILES)
-            carDataDF.loc[car, 'totalDistance'] += (mileage/chunks)
-        
-        # ***** FOR CARS THAT NEED RAPID CHARGING, RAPID CHARGE *****
+        # IF CAR DOESN'T NEED RAPID CHARGING, DECREASE BATT (DRIVE):
         else:
-            # CALCULATE BATTERY INCREASE
-            if batt + rcRate/chunks > battSize: RCbattIncrease = battSize - batt
-            else:                               RCbattIncrease = rcRate/chunks
+            # DECREASE BATTERY OF VEHICLE
+            carDataDF, kwphr, chargeDiff, costPerCharge = decreaseBatt(car, carDataDF, driveDataByCar, ind, nonChargingBreak, latLongDF)
+            # UPDATE RAPID CHARGE CHUNKS
+            carDataDF.loc[car,'rcChunks'] = 0
+            # UPDATE EVENT
+            event = 'wait' if kwphr == 0.0 else 'drive'
 
-            # UPDATE RAPID CHARGE COUNT AND TOTAL COST
-            rcCost = rcPrice * RCbattIncrease
-            totalCost += rcCost
-
-            # UPDATE SIMULATION ACCORDINGLY
-            simulationDF = simulationDF.append({
-                'time': time,
-                'car': car,
-                'chargeDiff': round(RCbattIncrease, 1),
-                'batt': round(batt, 1),
-                'event': 'RC',
-                'costPerCharge': round(rcCost, 2),
-                'totalCost': round(totalCost, 2)
-            }, ignore_index=True)
-
-            # RAPID CHARGE and ASSIGN BATTERY
-            carDataDF.loc[car,'battkW'] = batt + RCbattIncrease
-            # ASSIGN UPDATED TOTAL COST
-            carDataDF.loc[car, 'totalCost'] += rcCost
-
-    return carDataDF, simulationDF
-
-#########################################################################
-# SIMILAR TO DRIVING FUNCTION (WITH LATITUDE AND LONGITUDE CALCULATIONS)
-#########################################################################
-def latLongDriving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, simulationDF, ind):
-    # EXTRACT RAPID CHARGE DATA
-    rcPrice = getData(rcData, 'rcPrice')        # PRICE PER KW OF RAPID CHARGE (£ PER KW)
-    rcDuration = getData(rcData, 'rcDuration')  # RAPID CHARGE DURATION (HRS)
-    rcPerc = getData(rcData, 'rcPerc')          # WHAT PERCENTAGE TO START RAPID CHARGING (%)
-    rcRate = getData(rcData, 'rcRate')          # RATE OF RAPID CHARGING (KW/HR)
-
-    # UPDATE RAPID CHARGE CHUNKS IN CARDATADF and UPDATE RCCOUNT
-    carDataDF, drivingCarsDF = checkRC(carDataDF, rcDuration, rcPerc)
-
-    # GET OTHER PARAMETERS
-    drivingValues = driveDataByCar['0'].shape[0]
-    breakStart = getData(breaksDF, 'startBreak')
-    breakEnd = getData(breaksDF, 'endBreak')
-    totalCost = carDataDF['totalCost'].sum()
-
-    for rows in range(len(drivingCarsDF)):
-        car = drivingCarsDF.index[rows]
-
-        # READ BATTERY and BATTERY SIZE
-        batt = carDataDF.loc[car, 'battkW']
-        battSize = carDataDF.loc[car, 'battSize']
-        destinations = latLongDF.loc[car,'destinations']
-        
-        # ***** FOR CARS THAT DON'T NEED RAPID CHARGING, DECREASE BATT (DRIVE) *****
-        if carDataDF.loc[car, 'rcChunks'] == 0:
-            # SET MILEAGE AND MPKW
-            mileage = 16
-            mpkw = 4
-
-            # UPDATE MILEAGE TO BE 0 DURING BREAK PERIOD
-            if not breakStart == "None":
-                if readTime(breakStart) <= time.time() < readTime(breakEnd):
-                    mileage = 0
-
-            # GET INDEX OF NEXT DESTINATION
-            destIndex = carDataDF.loc[car, 'destIndex']
-            # GET LATITUDE AND LONGITUDE PARAMETERS
-            currLat, currLong = carDataDF.loc[car, 'lat'], carDataDF.loc[car, 'long']
-            destLat, destLong = carDataDF.loc[car, 'destLat'], carDataDF.loc[car, 'destLong']
-
-            # CALCULATE BEARING OR DIRECTION OF TRAVEL
-            bearing = calculateBearing((currLat, currLong),(destLat, destLong))
-            # CALCULATE NEXT LATITUDE AND LONGITUDE FOR NEXT TIME FRAME
-            newLat, newLong = milesToLatLong(currLat, currLong, bearing, mileage/chunks)
-
-            # IF LATITUDE PASSES BY DESTINATION LATITUDE
-            #   VEHICLE HAS REACHED ITS INTENDED DESTINATION
-            if (currLat < destLat < newLat) or (newLat < destLat < currLat):
-                newLat, newLong = destLat, destLong
-
-                # ENSURE THE CYCLE REPEATS
-                destIndex = (destIndex + 1) % len(destinations)
-                # ASSIGNS DESTINATION LATITUDE AND LONGITUDE
-                carDataDF.loc[car,'destIndex'] = destIndex
-                carDataDF.loc[car,'destLat'] = destinations[destIndex][0]
-                carDataDF.loc[car,'destLong'] = destinations[destIndex][1]
-            
-            carDataDF.loc[car,'lat'] = newLat
-            carDataDF.loc[car,'long'] = newLong
-
-            # CALCULATE RATE OF BATT DECREASE
-            kwphr = mileage/mpkw
-
-            # UPDATE SIMULATION ACCORDINGLY
-            simulationDF = simulationDF.append({
-                'time': time,
-                'car': car,
-                'chargeDiff': round(-kwphr/chunks, 1),
-                'batt': round(batt, 1),
-                'event': 'drive' if not kwphr==0.0 else 'wait',
-                'costPerCharge': 0,
-                'totalCost': round(totalCost, 2)
-            }, ignore_index=True)
-
-            # UPDATE BATTERY AND TOTAL DISTANCE OF CAR (IN MILES)
-            carDataDF.loc[car,'battkW'] = batt - (kwphr/chunks)
-            carDataDF.loc[car, 'totalDistance'] += (mileage/chunks)
-        
-        # ***** FOR CARS THAT NEED RAPID CHARGING, RAPID CHARGE *****
-        else:
-            # CALCULATE BATTERY INCREASE
-            if batt + rcRate/chunks > battSize: RCbattIncrease = battSize - batt
-            else:                               RCbattIncrease = rcRate/chunks
-
-            # UPDATE RAPID CHARGE COUNT AND TOTAL COST
-            rcCost = rcPrice * RCbattIncrease
-            totalCost += rcCost
-
-            # UPDATE SIMULATION ACCORDINGLY
-            simulationDF = simulationDF.append({
-                'time': time,
-                'car': car,
-                'chargeDiff': round(RCbattIncrease, 1),
-                'batt': round(batt, 1),
-                'event': 'RC',
-                'costPerCharge': round(rcCost, 2),
-                'totalCost': round(totalCost, 2)
-            }, ignore_index=True)
-
-            # UPDATE BATTERY AND TOTAL COST
-            carDataDF.loc[car,'battkW'] = batt + RCbattIncrease
-            carDataDF.loc[car, 'totalCost'] += rcCost
+        # UPDATE SIMULATION ACCORDINGLY
+        simulationDF = simulationDF.append({
+            'time': time,
+            'car': car,
+            'chargeDiff': chargeDiff,
+            'batt': round(batt, 1),
+            'event': event,
+            'costPerCharge': costPerCharge,
+            'totalCost': round(totalCost, 2)
+        }, ignore_index=True)
 
     return carDataDF, simulationDF

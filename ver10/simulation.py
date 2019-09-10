@@ -21,7 +21,7 @@ startTime = readTime("2019-01-01 06:00:00") # (FORMAT: DATETIME)
 
 # READ IN NECESSARY CSV FILES
 allShiftsDF = pd.read_csv("csv/schedules/" + schedule + ".csv", sep=";", index_col=None)
-drivingDF = pd.read_csv("csv/driving/HighMpkwLowSD.csv", sep=";", index_col=None)
+drivingDF = pd.read_csv("csv/driving/constantDriving.csv", sep=";", index_col=None)
 pricesDF = pd.read_csv("csv/prices.csv", sep=";", index_col=None)
 pricesDF = pricesDF.loc[pricesDF.company == company]
 breaksDF = pd.read_csv("csv/breaks.csv", sep=";", index_col=None)
@@ -36,8 +36,8 @@ latLongData = pd.read_csv("csv/latLongData.csv", sep=";", index_col=None)
 resultDF = pd.DataFrame(columns=['dumbRC','leaveTRC','battRC','smartRC','costRC','costRC2','extraRC',
                                 'dumbCost','leaveTCost','battCost','smartCost','costCost','costCost2','extraCost'])
 
-dumbDF, dumbRC, dumbCost = runSimulation(startTime, runTime, rcData, latLongData,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, dumbCharge)
+# dumbDF, dumbRC, dumbCost = runSimulation(startTime, runTime, rcData, latLongData,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, dumbCharge)
 
 # leaveTDF, leaveTRC, leaveTCost = runSimulation(startTime, runTime, rcData, latLongData,
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_leavetime)

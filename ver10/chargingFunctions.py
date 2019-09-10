@@ -1,7 +1,138 @@
 import pandas as pd
 import numpy as np
+import time
 from chunks import chunks
 from supportFunctions import *
+
+######################################################
+# FUNCTIONS WHICH SUPPORT CHARGING
+######################################################
+
+# ALLOCATE AN AVAILABLE CHARGE PT OR SELECT CURRENT CHARGE PT
+def findChargePt(carDataDF, car, chargePtDF):
+    # SELECT AVAILABLE CHARGE PTS
+    availablePts = chargePtDF.loc[chargePtDF['inUse'] != 1]
+    chargePt = carDataDF.loc[car, 'chargePt']
+
+    # IF CAR IS NOT ON A CHARGE PT, PLUG INTO FIRST AVAILABLE CHARGE PT
+    if np.isnan(chargePt) and len(availablePts) > 0:
+        pt = availablePts.index[0]
+        # print("car "+str(car)+" plugged into CP "+str(pt))
+        availablePts = availablePts.drop(pt, axis=0)
+
+        # UPDATE CHARGE PT DF and CAR DATA DF
+        chargePtDF.loc[pt, 'inUse'] = 1
+        carDataDF.loc[car, 'chargePt'] = pt
+
+    # IF CAR HAS A CHARGE PT, PT = CHARGE PT, ELSE PT = NAN
+    else:
+        pt = chargePt
+
+    return pt, carDataDF, chargePtDF
+
+# IN SORTED ORDER, CALCULATE PRIORITY RATIO AND ASSIGN CHARGE
+def priorityCharge(priorities, availablePower, carDataDF, chargePtDF):
+    # CALCULATE THE SUM OF PRIORITY VALUES
+    prioritySum = sum(priorities.priority)
+    
+    # FOR EVERY CAR:
+    for row in range(0, len(priorities)):
+        # READ IN DATA FOR SELECTED CAR
+        car = priorities.loc[row, 'car']
+        batt = carDataDF.loc[car, 'battkW']
+        battSize = carDataDF.loc[car, 'battSize']
+        battLeft = priorities.loc[row, 'battLeft']
+        priority = priorities.loc[row, 'priority']
+
+        # IF CAR BATT IS NOT 100%, CHARGE CAR
+        if batt < battSize:
+            # ALLOCATE CHARGE PT IF CAR DOESN'T HAVE ONE
+            pt, carDataDF, chargePtDF = findChargePt(carDataDF, car, chargePtDF)
+            chargeRate = 0
+
+            # IF CAR HAS A VALID CHARGE PT
+            if not np.isnan(pt):
+                # READ MAX RATE
+                maxRate = chargePtDF.loc[pt, 'maxRate']
+
+                # CALCULATE CHARGE RATE USING PRIORITY/SUM OF PRIORITIES
+                if prioritySum == 0.0: chargeRate = 0
+                else:                  chargeRate = (priority/prioritySum)*availablePower
+
+                # IF CHARGE RATE EXCEEDS MAX RATE:
+                if chargeRate > maxRate: chargeRate = maxRate
+                # IF CHARGE RATE EXCEEDS CHARGE NEEDED:
+                if chargeRate/chunks > battLeft: chargeRate = battLeft*chunks
+
+            # ADJUST REMAINING AVAILABLE POWER AND PRIORITY SUM
+            availablePower -= chargeRate
+            prioritySum -= priority
+
+            # UPDATE CHARGE RATE
+            carDataDF.loc[car, 'chargeRate'] = chargeRate
+
+    return carDataDF
+
+# CHARGE VEHICLE FOR ONE HOUR
+def charge(time, carDataDF, depot, simulationDF, pricesDF):
+    # GET TOTAL COST OF ALL VEHICLES
+    totalCost = carDataDF['totalCost'].sum()
+
+    # FOR EVERY CAR IN THE DEPOT
+    for index in range(len(depot)):
+        car = depot[index]
+
+        # READ IN BATTERY, BATTERY SIZE AND CHARGE RATE
+        batt = carDataDF.loc[car,'battkW']
+        battSize = carDataDF.loc[car,'battSize']
+        chargeRate = carDataDF.loc[car,'chargeRate']
+
+        # DETERMINE EVENT STATUS
+        if chargeRate > 0:     event = "charge"
+        elif batt == battSize: event = "full"
+        else:                  event = "wait"
+
+        # TAKE INTO ACCOUNT VEHICLES REACHING FULL BATTERY
+        if batt + chargeRate/chunks >= battSize:
+            chargeRate = (battSize-batt)*chunks
+
+        # FIND PRICE OF CHARGE AT TIME
+        #   * Read in start and end times of green zone
+        lowTariffStartHr = getData(pricesDF, 'startGreenZone')
+        lowTariffEndHr = getData(pricesDF, 'endGreenZone')
+        #   * Read in current time without date
+        timeHr = readTime(str(time.time()))
+
+        # USE APPROPRIATE PRICING BASED ON CURRENT TIME
+        if readTime(lowTariffStartHr) <= timeHr < readTime(lowTariffEndHr):
+            price = float(getData(pricesDF, 'priceGreenZone'))
+        else:
+            price = float(getData(pricesDF, 'priceRedZone'))
+
+        # CALCULATE COST OF CHARGE AND ADD THIS TO TOTAL COST
+        costOfCharge = (chargeRate*price)/chunks
+        totalCost += costOfCharge
+
+        # APPEND DATA TO SIMULATION DATA
+        simulationDF = simulationDF.append({
+            'time': time,
+            'car': car,
+            'chargeDiff': round(chargeRate/chunks, 1),
+            'batt': round(batt, 1),
+            'event': event,
+            'costPerCharge': round(costOfCharge, 2) if chargeRate > 0 else 0,
+            'totalCost': round(totalCost, 2)
+        }, ignore_index=True)
+
+        # ASSIGN UPDATED BATTERY KW
+        carDataDF.loc[car, 'battkW'] = batt + chargeRate/chunks
+
+        # ASSIGN UPDATED TOTAL COST
+        carTotalCost = carDataDF.loc[car, 'totalCost']
+        carDataDF.loc[car, 'totalCost'] = carTotalCost + costOfCharge
+
+    return carDataDF, simulationDF
+
 
 #################################
 # INCREASE BATT DURING CHARGE
@@ -334,70 +465,6 @@ def extraCharge(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF,
         if (time < lowTariffStart) and (nextStart > lowTariffStart) and (eventChange[1] != "extraCharging"):
             # DELAY CHARGING UNTIL IT'S TIME TO EXTRA CHARGE
             prior = 0.0
-
-        # LET PRIORITY = BATTLEFT/TIME LEFT, APPEND TO LIST
-        priorityRows.append([carNum, prior, battLeft])
-
-    # CONVERT LIST INTO DATAFRAME AND SORT BY PRIORITY
-    leaveTimes = pd.DataFrame.from_records(priorityRows, columns=['car','priority','battLeft'])
-    leaveTimes = leaveTimes.sort_values(by=['priority'], ascending=False)
-    leaveTimes = leaveTimes.reset_index(drop=True)
-
-    # IN SORTED ORDER, CALCULATE PRIORITY RATIO AND CHARGE
-    carDataDF = priorityCharge(leaveTimes, availablePower, carDataDF, chargePtDF)
-
-    return carDataDF
-
-##############################################
-# INCREASE BATT DURING CHARGE (PREDICTIVE)
-##############################################
-# PRIORITY = BATT NEEDED/TIME LEFT IN DEPOT
-# PREDICTS SPECIFICALLY HOW MUCH CHARGE EACH VEHICLE WILL GET DURING LOW TARIFF PERIOD
-#   DETERMINES WHETHER IT IS WORTH WAITING FOR LOW TARIFF PERIOD
-# CHARGE RATE = (PRIORITY/SUM OF ALL PRIORITIES)*AVAILABLE POWER
-def predictiveCharge(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange):
-    # DEFINE NEXT LOW TARIFF ZONE
-    lowTariffStart, lowTariffEnd = nextLowTariffZone(time, pricesDF)
-    
-    # CREATE A LIST FOR CARS AND THEIR LEAVETIME AND BATT NEEDED
-    priorityRows = []
-
-    # STORE INOUTDEPOT EVENTS DURING LOW TARIFF ZONE
-    gzStatus = getGZStatus(depot, carDataDF, shiftsByCar, lowTariffStart, lowTariffEnd)
-    
-    # ***** CALCULATE PRIORITY FOR EACH CAR AND APPEND TO A LIST *****
-    for cars in range(0, len(depot)):
-        carNum = depot[cars]
-
-        # FIND THE START TIME OF NEXT SHIFT
-        nextStart = nextShiftStart(carNum, carDataDF, shiftsByCar)
-
-        # CALCULATE TIME LEFT AND BATT NEEDED
-        hrsLeft = ((rereadTime(nextStart) - rereadTime(time)).total_seconds())/(60*60)
-        battLeft = carDataDF.loc[carNum,'battSize']-carDataDF.loc[carNum,'battkW']
-        prior = battLeft/hrsLeft
-
-        # IF LOW TARIFF ZONE HASN'T STARTED YET,
-        # AND IF CAR WILL BE CHARGING THROUGHOUT LOW TARIFF ZONE:
-        if (time < lowTariffStart) and (nextStart > lowTariffStart):
-            # DELAY CHARGING UNTIL LOW TARIFF ZONE
-            prior = 0.0
-
-        # DETERMINE WHETHER VEHICLE IS ABLE TO FULLY CHARGE IN LOW TARIFF ZONE
-        carTimes = gzStatus.loc[(gzStatus.car == carNum)]
-        if (len(carTimes) > 0) and (len(depot) == len(carDataDF)):
-            carIn, carOut = carTimes.iloc[:,0]
-            toCalculate = gzStatus.loc[(gzStatus.time <= carOut) & (gzStatus.time >= carIn)]
-            toCalculate = toCalculate.groupby('time').sum()
-            
-            chargeAvailable = 0
-            carsInDepot = 0
-            for i in range(len(toCalculate)-1):
-                durationHrs = (toCalculate.index[i+1] - toCalculate.index[i]).total_seconds()/(3600)
-                carsInDepot += toCalculate['inDepot'][i]
-                chargeAvailable += availablePower*durationHrs/carsInDepot
-
-            if chargeAvailable < battLeft: prior = battLeft/hrsLeft
 
         # LET PRIORITY = BATTLEFT/TIME LEFT, APPEND TO LIST
         priorityRows.append([carNum, prior, battLeft])
