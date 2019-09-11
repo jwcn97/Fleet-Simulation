@@ -4,7 +4,7 @@ from supportFunctions import *
 from chargingFunctions import *
 from drivingFunctions import *
 
-def runSimulation(startTime, runTime, rcData, latLongData,
+def runSimulation(startTime, runTime, rcData,
                 fleetData, driveDataDF, allShiftsDF, breaksDF, pricesDF, algo):
 
     # INITIALISE MAIN DATAFRAMES WITH DATA AT START TIME
@@ -16,12 +16,11 @@ def runSimulation(startTime, runTime, rcData, latLongData,
                 "shiftIndex","latestStartShift","latestEndShift"]
     cpCols = ["maxRate","inUse"]
     simCols = ["time","car","chargeDiff","batt","event","costPerCharge","totalCost"]
-    latLongCols = ["car","destinations"]
 
     #   Get depot coordinates
     depotCoord = eval(getData(fleetData, 'depotCoord'))
     #   Generate dataframes from csv inputs
-    carDataDF, chargePtDF, simulationDF, latLongDF = generateDF(fleetData, latLongData, carCols, cpCols, simCols, latLongCols)
+    carDataDF, chargePtDF, simulationDF = generateDF(fleetData, carCols, cpCols, simCols)
 
     depot = []
     driveDataByCar = {}
@@ -46,15 +45,14 @@ def runSimulation(startTime, runTime, rcData, latLongData,
         eventChange = (False, None)
 
         # *** RUN FUNCTIONS THAT INCLUDE WILL RECOGNISE CHANGES IN EVENTS ***
-        eventChange, carDataDF, depot, chargePtDF = inOutDepot(time, carDataDF, shiftsByCar, depot, latLongDF, chargePtDF, eventChange)
+        eventChange, carDataDF, depot, chargePtDF = inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, eventChange)
         eventChange, carDataDF = readFullBattCars(time, carDataDF, simulationDF, eventChange)
         eventChange = readTariffChanges(time, pricesDF, eventChange)
         eventChange = readExtraCharging(time, pricesDF, depot, carDataDF, shiftsByCar, availablePower, eventChange)
 
         # *** RUN FUNCTIONS AFFECTING CARS OUTSIDE THE DEPOT ***
         # DECREASE BATT/RAPID CHARGE CARS OUTSIDE THE DEPOT
-        carDataDF, simulationDF = driving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, simulationDF, i)
-        # carDataDF, simulationDF = rcSmartDriving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, simulationDF, i)
+        carDataDF, simulationDF = driving(time, carDataDF, driveDataByCar, breaksDF, rcData, simulationDF, i)
 
         # *** RUN FUNCTIONS AFFECTING CARS IN THE DEPOT ***
         # IF THERE IS AN EVENT and THERE ARE CARS THAT REQUIRE CHARGING

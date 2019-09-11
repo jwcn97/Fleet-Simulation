@@ -54,7 +54,6 @@ def runSimulation(startTime, runTime, rcData, latLongData,
         # *** RUN FUNCTIONS AFFECTING CARS OUTSIDE THE DEPOT ***
         # DECREASE BATT/RAPID CHARGE CARS OUTSIDE THE DEPOT
         carDataDF, simulationDF = driving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, simulationDF, i)
-        # carDataDF, simulationDF = rcSmartDriving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, simulationDF, i)
 
         # *** RUN FUNCTIONS AFFECTING CARS IN THE DEPOT ***
         # IF THERE IS AN EVENT and THERE ARE CARS THAT REQUIRE CHARGING

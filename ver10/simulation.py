@@ -14,7 +14,7 @@ outputFolder = "results/"
 company = "BritishGas"
 schedule = "shift3"
 hasBreak = 0
-fleetType = 0
+fleetType = 12
 rcType = 0
 runTime = 24*5                              # (UNITS:  HRS)
 startTime = readTime("2019-01-01 06:00:00") # (FORMAT: DATETIME)
@@ -31,31 +31,27 @@ fleetData = fleetDF.loc[fleetDF.index == fleetType]
 rcDF = pd.read_csv("csv/rcData.csv", sep=";", index_col=None)
 rcData = rcDF.loc[rcDF.index == rcType]
 
-latLongData = pd.read_csv("csv/latLongData.csv", sep=";", index_col=None)
-
-resultDF = pd.DataFrame(columns=['dumbRC','leaveTRC','battRC','smartRC','costRC','costRC2','extraRC',
-                                'dumbCost','leaveTCost','battCost','smartCost','costCost','costCost2','extraCost'])
-
-# dumbDF, dumbRC, dumbCost = runSimulation(startTime, runTime, rcData, latLongData,
+# dumbDF, dumbRC, dumbCost = runSimulation(startTime, runTime, rcData,
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, dumbCharge)
 
-# leaveTDF, leaveTRC, leaveTCost = runSimulation(startTime, runTime, rcData, latLongData,
+# leaveTDF, leaveTRC, leaveTCost = runSimulation(startTime, runTime, rcData,
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_leavetime)
 
-# battDF, battRC, battCost = runSimulation(startTime, runTime, rcData, latLongData,
+# battDF, battRC, battCost = runSimulation(startTime, runTime, rcData,
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_batt)
 
-# smartDF, smartRC, smartCost = runSimulation(startTime, runTime, rcData, latLongData,
+# smartDF, smartRC, smartCost = runSimulation(startTime, runTime, rcData,
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_battOverLeavetime)
 
-# costDF, costRC, costCost = runSimulation(startTime, runTime, rcData, latLongData,
+# costDF, costRC, costCost = runSimulation(startTime, runTime, rcData,
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, costSensitiveCharge)
 
-# costDF2, costRC2, costCost2 = runSimulation(startTime, runTime, rcData, latLongData,
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, costSensitiveCharge2)
+extraDF, extraRC, extraCost = runSimulation(startTime, runTime, rcData,
+                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, extraCharge)
+styleDF(extraDF).to_excel('results/fleet' + str(fleetType) + '_case5_gold.xlsx')
 
-# extraDF, extraRC, extraCost = runSimulation(startTime, runTime, rcData, latLongData,
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, extraCharge)
+# resultDF = pd.DataFrame(columns=['dumbRC','leaveTRC','battRC','smartRC','costRC','extraRC',
+#                                 'dumbCost','leaveTCost','battCost','smartCost','costCost','extraCost'])
 
 # resultDF = resultDF.append({
 #     'dumbRC':dumbRC,
@@ -63,14 +59,12 @@ resultDF = pd.DataFrame(columns=['dumbRC','leaveTRC','battRC','smartRC','costRC'
 #     'battRC':battRC,
 #     'smartRC':smartRC,
 #     'costRC':costRC,
-#     'costRC2':costRC2,
 #     'extraRC':extraRC,
 #     'dumbCost':dumbCost,
 #     'leaveTCost':leaveTCost,
 #     'battCost':battCost,
 #     'smartCost':smartCost,
 #     'costCost':costCost,
-#     'costCost2':costCost2,
 #     'extraCost':extraCost
 # }, ignore_index=True)
 
@@ -86,7 +80,6 @@ resultDF = pd.DataFrame(columns=['dumbRC','leaveTRC','battRC','smartRC','costRC'
 # styleDF(battDF).to_excel(writer, sheet_name="batt")
 # styleDF(smartDF).to_excel(writer, sheet_name="smart")
 # styleDF(costDF).to_excel(writer, sheet_name="cost")
-# styleDF(costDF2).to_excel(writer, sheet_name="cost2")
 # styleDF(extraDF).to_excel(writer, sheet_name="extra")
 # resultDF.to_excel(writer, sheet_name="results")
 # # close writer
@@ -109,3 +102,4 @@ resultDF = pd.DataFrame(columns=['dumbRC','leaveTRC','battRC','smartRC','costRC'
 # compareCars(outputFolder+schedule, battDF, 'batt', total_cars, company)
 # compareCars(outputFolder+schedule, smartDF, 'smart', total_cars, company)
 # compareCars(outputFolder+schedule, costDF, 'cost', total_cars, company)
+# compareCars(outputFolder+schedule, extraDF, 'extra', total_cars, company)
