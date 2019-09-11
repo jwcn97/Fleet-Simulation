@@ -6,6 +6,124 @@ import time
 from chunks import chunks
 from supportFunctions import *
 
+#######################################
+# LAT AND LONG FUNCTIONS
+#######################################
+
+# CALCULATE BEARING BETWEEN TWO POINTS
+#   POINT A, POINT B IN THE FORM OF TUPLES
+def calculateBearing(pointA, pointB):
+    """
+    Calculates the bearing between two points.
+    The formulae used is the following:
+        θ = atan2(sin(Δlong).cos(lat2),
+                  cos(lat1).sin(lat2) − sin(lat1).cos(lat2).cos(Δlong))
+    :Parameters:
+      - `pointA: The tuple representing the latitude/longitude for the
+        first point. Latitude and longitude must be in decimal degrees
+      - `pointB: The tuple representing the latitude/longitude for the
+        second point. Latitude and longitude must be in decimal degrees
+    :Returns:
+      The bearing in degrees
+    :Returns Type:
+      float
+    """
+    if (type(pointA) != tuple) or (type(pointB) != tuple):
+        raise TypeError("Only tuples are supported as arguments")
+
+    lat1 = math.radians(pointA[0])
+    lat2 = math.radians(pointB[0])
+
+    diffLong = math.radians(pointB[1] - pointA[1])
+
+    x = math.sin(diffLong) * math.cos(lat2)
+    y = math.cos(lat1) * math.sin(lat2) - (math.sin(lat1)
+            * math.cos(lat2) * math.cos(diffLong))
+
+    initial_bearing = math.atan2(x, y)
+
+    # Now we have the initial bearing but math.atan2 return values
+    # from -180° to + 180° which is not what we want for a compass bearing
+    # The solution is to normalize the initial bearing as shown below
+    initial_bearing = math.degrees(initial_bearing)
+    compass_bearing = (initial_bearing + 360) % 360
+
+    return compass_bearing
+
+# FIND LAT LONG LOCATION BASED ON MILES AND BEARING
+#   bearing (in degrees), distance (in miles)
+def milesToLatLong(lat1, long1, bearing, distance):
+    origin = geopy.Point(lat1, long1)
+    destination = VincentyDistance(kilometers=distance*1.609).destination(origin, bearing)
+
+    return destination.latitude, destination.longitude
+
+# FIND THE DISTANCE BETWEEN TWO COORDINATES
+#   ASSUMES EARTH IS PERFECTLY SPHERICAL
+def latLongToMiles(lat1, long1, lat2, long2):
+    # Convert latitude and longitude to
+    # spherical coordinates in radians.
+    degrees_to_radians = math.pi/180.0
+
+    # phi = 90 - latitude
+    phi1 = (90.0 - lat1)*degrees_to_radians
+    phi2 = (90.0 - lat2)*degrees_to_radians
+
+    # theta = longitude
+    theta1 = long1*degrees_to_radians
+    theta2 = long2*degrees_to_radians
+
+    # Compute spherical distance from spherical coordinates.
+
+    # For two locations in spherical coordinates
+    # (1, theta, phi) and (1, theta', phi')
+    # cosine( arc length ) =
+    # sin phi sin phi' cos(theta-theta') + cos phi cos phi'
+    # distance = rho * arc length
+
+    cos = (math.sin(phi1)*math.sin(phi2)*math.cos(theta1 - theta2) +
+    math.cos(phi1)*math.cos(phi2))
+    arc = math.acos( cos )
+
+    # Remember to multiply arc by the radius of the earth
+    # in your favorite set of units to get length.
+    return arc*3960
+
+# UPDATE THE LAT AND LONG OF VEHICLE WHILE DRIVING
+#   distance = distance going to be travelled by vehicle in this time slot
+#   (dependent on number of chunks)
+def updateLatLong(car, carDataDF, latLongDF, distance):
+    # GET ALL DESTINATIONS OF VEHICLE
+    destinations = latLongDF.loc[car,'destinations']
+    # GET INDEX OF NEXT DESTINATION
+    destIndex = carDataDF.loc[car, 'destIndex']
+    # GET LATITUDE AND LONGITUDE PARAMETERS
+    currLat, currLong = carDataDF.loc[car, 'lat'], carDataDF.loc[car, 'long']
+    destLat, destLong = carDataDF.loc[car, 'destLat'], carDataDF.loc[car, 'destLong']
+
+    # CALCULATE BEARING OR DIRECTION OF TRAVEL
+    bearing = calculateBearing((currLat, currLong),(destLat, destLong))
+    # CALCULATE NEXT LATITUDE AND LONGITUDE FOR NEXT TIME FRAME
+    newLat, newLong = milesToLatLong(currLat, currLong, bearing, distance)
+
+    # IF LATITUDE PASSES BY DESTINATION LATITUDE
+    #   VEHICLE HAS REACHED ITS INTENDED DESTINATION
+    if (currLat < destLat < newLat) or (newLat < destLat < currLat):
+        newLat, newLong = destLat, destLong
+
+        # ENSURE THE CYCLE REPEATS
+        destIndex = (destIndex + 1) % len(destinations)
+
+        # ASSIGNS DESTINATION LATITUDE AND LONGITUDE
+        carDataDF.loc[car,'destIndex'] = destIndex
+        carDataDF.loc[car,'destLat'] = destinations[destIndex][0]
+        carDataDF.loc[car,'destLong'] = destinations[destIndex][1]
+    
+    carDataDF.loc[car,'lat'] = newLat
+    carDataDF.loc[car,'long'] = newLong
+
+    return carDataDF
+
 
 ##################################################
 # FUNCTIONS WHICH SUPPORT DRIVING
@@ -71,6 +189,9 @@ def decreaseBatt(car, carDataDF, driveDataByCar, ind, nonChargingBreak, latLongD
 
     # CALCULATE RATE OF BATT DECREASE
     kwphr = mileage/mpkw
+
+    # UPDATE LAT AND LONG OF VEHICLE WHILE DRIVING
+    carDataDF = updateLatLong(car, carDataDF, latLongDF, mileage/chunks)
 
     # SET INPUTS FOR SIMULATION DF
     chargeDiff = round(-kwphr/chunks, 1)
