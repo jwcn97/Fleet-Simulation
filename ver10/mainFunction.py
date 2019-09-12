@@ -17,8 +17,6 @@ def runSimulation(startTime, runTime, rcData,
     cpCols = ["maxRate","inUse"]
     simCols = ["time","car","chargeDiff","batt","event","costPerCharge","totalCost"]
 
-    #   Get depot coordinates
-    depotCoord = eval(getData(fleetData, 'depotCoord'))
     #   Generate dataframes from csv inputs
     carDataDF, chargePtDF, simulationDF = generateDF(fleetData, carCols, cpCols, simCols)
 
@@ -42,7 +40,7 @@ def runSimulation(startTime, runTime, rcData,
     # RUN SIMULATION FOR ALL OF RUN TIME
     for i in range(0, runTime*chunks):
         # INITIALISE A VARIABLE TO CHECK FOR EVENT CHANGES
-        eventChange = (False, None)
+        eventChange = None
 
         # *** RUN FUNCTIONS THAT INCLUDE WILL RECOGNISE CHANGES IN EVENTS ***
         eventChange, carDataDF, depot, chargePtDF = inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, eventChange)
@@ -57,7 +55,7 @@ def runSimulation(startTime, runTime, rcData,
         # *** RUN FUNCTIONS AFFECTING CARS IN THE DEPOT ***
         # IF THERE IS AN EVENT and THERE ARE CARS THAT REQUIRE CHARGING
         # RUN CHARGING ALGORITHM
-        if (eventChange[0] == True) and (len(depot) > 0):
+        if (eventChange != None) and (len(depot) > 0):
             carDataDF = algo(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange)
 
         # CHARGE/READ WAITING CARS IN THE DEPOT
@@ -69,4 +67,5 @@ def runSimulation(startTime, runTime, rcData,
         # INCREMENT TIME OF SIMULATION
         time = incrementTime(time)
 
+    print(round(carDataDF['totalCost'].sum(),2))
     return simulationDF, carDataDF['rcCount'].sum(), carDataDF['totalCost'].sum()

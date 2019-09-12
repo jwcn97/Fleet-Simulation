@@ -18,8 +18,6 @@ def runSimulation(startTime, runTime, rcData, latLongData,
     simCols = ["time","car","chargeDiff","batt","event","costPerCharge","totalCost"]
     latLongCols = ["car","destinations"]
 
-    #   Get depot coordinates
-    depotCoord = eval(getData(fleetData, 'depotCoord'))
     #   Generate dataframes from csv inputs
     carDataDF, chargePtDF, simulationDF, latLongDF = generateDF(fleetData, latLongData, carCols, cpCols, simCols, latLongCols)
 
@@ -43,7 +41,7 @@ def runSimulation(startTime, runTime, rcData, latLongData,
     # RUN SIMULATION FOR ALL OF RUN TIME
     for i in range(0, runTime*chunks):
         # INITIALISE A VARIABLE TO CHECK FOR EVENT CHANGES
-        eventChange = (False, None)
+        eventChange = None
 
         # *** RUN FUNCTIONS THAT INCLUDE WILL RECOGNISE CHANGES IN EVENTS ***
         eventChange, carDataDF, depot, chargePtDF = inOutDepot(time, carDataDF, shiftsByCar, depot, latLongDF, chargePtDF, eventChange)
@@ -58,7 +56,7 @@ def runSimulation(startTime, runTime, rcData, latLongData,
         # *** RUN FUNCTIONS AFFECTING CARS IN THE DEPOT ***
         # IF THERE IS AN EVENT and THERE ARE CARS THAT REQUIRE CHARGING
         # RUN CHARGING ALGORITHM
-        if (eventChange[0] == True) and (len(depot) > 0):
+        if (eventChange != None) and (len(depot) > 0):
             carDataDF = algo(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange)
 
         # CHARGE/READ WAITING CARS IN THE DEPOT

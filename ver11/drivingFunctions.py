@@ -109,8 +109,8 @@ def updateLatLong(car, carDataDF, latLongDF, distance):
     # IF LATITUDE PASSES BY DESTINATION LATITUDE
     #   VEHICLE HAS REACHED ITS INTENDED DESTINATION
     if (currLat < destLat < newLat) or (newLat < destLat < currLat):
+        # SET NEW LAT AND LONG TO THAT OF DESTINATION'S
         newLat, newLong = destLat, destLong
-
         # ENSURE THE CYCLE REPEATS
         destIndex = (destIndex + 1) % len(destinations)
 

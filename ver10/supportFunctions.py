@@ -206,7 +206,7 @@ def inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, eventChange):
             depot.append(car)
 
             # RECOGNISE AN EVENT HAS HAPPENED
-            eventChange = (True, "enterDepot")
+            eventChange = "enterDepot"
 
         # ***** CHECK IF CAR IS AT THE START OF A SHIFT *****
         # READ INDEX OF CURRENT SHIFT AND LENGTH OF SHIFTS BY CAR
@@ -240,7 +240,7 @@ def inOutDepot(time, carDataDF, shiftsByCar, depot, chargePtDF, eventChange):
                 carDataDF.loc[car,'latestEndShift'] = nextEndShift
 
                 # RECOGNISE AN EVENT HAS HAPPENED
-                eventChange = (True, "exitDepot")
+                eventChange = "exitDepot"
 
     return eventChange, carDataDF, depot, chargePtDF
 
@@ -269,7 +269,7 @@ def readFullBattCars(time, carDataDF, simulationDF, eventChange):
         # AND IF INDEX OF FULL BATT CARS ARE DIFFERENT FROM PREVIOUS FULL BATT CARS:
         if fullBattCars != prevFullBattCars:
             # RECOGNISE AN EVENT HAS HAPPENED
-            eventChange = (True, "fullBatt")
+            eventChange = "fullBatt"
 
     return eventChange, carDataDF
 
@@ -285,7 +285,7 @@ def readTariffChanges(time, pricesDF, eventChange):
     # TIME == START OR END OF LOW TARIFF ZONE, THERE IS A TARIFF CHANGE
     if timeHr == readTime(lowTariffStartHr) or timeHr == readTime(lowTariffEndHr):
         # RECOGNISE AN EVENT HAS HAPPENED
-        eventChange = (True, "tariffChange")
+        eventChange = "tariffChange"
 
     return eventChange
 
@@ -319,7 +319,7 @@ def readExtraCharging(time, pricesDF, depot, carDataDF, shiftsByCar, availablePo
             bufferSlots = int(np.ceil(bufferHrs*chunks))
 
             if time == lowTariffStart-dt.timedelta(hours=bufferSlots/chunks):
-                eventChange = (True, "extraCharging")
+                eventChange = "extraCharging"
 
     return eventChange
 

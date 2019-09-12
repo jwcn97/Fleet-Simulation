@@ -14,7 +14,7 @@ outputFolder = "results/"
 company = "BritishGas"
 schedule = "shift3"
 hasBreak = 0
-fleetType = 12
+fleetType = 0
 rcType = 0
 runTime = 24*5                              # (UNITS:  HRS)
 startTime = readTime("2019-01-01 06:00:00") # (FORMAT: DATETIME)
@@ -48,7 +48,7 @@ rcData = rcDF.loc[rcDF.index == rcType]
 
 extraDF, extraRC, extraCost = runSimulation(startTime, runTime, rcData,
                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, extraCharge)
-styleDF(extraDF).to_excel('results/fleet' + str(fleetType) + '_case5_gold.xlsx')
+# styleDF(extraDF).to_excel('results/fleet' + str(fleetType) + '_case5_gold.xlsx')
 
 # resultDF = pd.DataFrame(columns=['dumbRC','leaveTRC','battRC','smartRC','costRC','extraRC',
 #                                 'dumbCost','leaveTCost','battCost','smartCost','costCost','extraCost'])
