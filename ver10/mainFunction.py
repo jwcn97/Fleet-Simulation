@@ -67,5 +67,4 @@ def runSimulation(startTime, runTime, rcData,
         # INCREMENT TIME OF SIMULATION
         time = incrementTime(time)
 
-    print(round(carDataDF['totalCost'].sum(),2))
     return simulationDF, carDataDF['rcCount'].sum(), carDataDF['totalCost'].sum()

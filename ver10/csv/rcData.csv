@@ -1,2 +1,6 @@
-"rcPrice";"rcPerc";"rcRate"
-0.3;20;50
+"company";"rcPrice";"rcFlatRate";"rcPerc";"rcRate"
+"Ecotricity";0.3;0;20;50
+"ShellRecharge";0.39;0;20;50
+"InstaVolt";0.35;0;20;50
+"Engenie";0.36;0;20;50
+"GeniePoint";0.36;0;20;50

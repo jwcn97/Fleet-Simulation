@@ -162,7 +162,7 @@ def decreaseBatt(car, carDataDF, driveDataByCar, ind, nonChargingBreak, latLongD
 
     # UPDATE BATTERY AND TOTAL DISTANCE OF CAR (IN MILES)
     carDataDF.loc[car,'battkW'] = batt - (kwphr/chunks)
-    carDataDF.loc[car, 'totalDistance'] += (mileage/chunks)
+    carDataDF.loc[car,'totalDistance'] += (mileage/chunks)
 
     return carDataDF, kwphr, chargeDiff, costPerCharge
 
