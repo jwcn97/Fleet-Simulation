@@ -69,26 +69,6 @@ def rapidCharge(car, carDataDF, rcRate, rcPrice, totalCost):
 
     return carDataDF, totalCost, chargeDiff, costPerCharge
 
-# PREDICT BATTERY NEEDED TILL VEHICLE ENTERS DEPOT
-def predictBattNeeded(car, hrsLeft, buffer, driveDataByCar, ind):
-    # READ TOTAL NUMBER OF DRIVING VALUES
-    drivingValues = driveDataByCar['0'].shape[0]
-    # SET BUFFER FOR BATTERY NEEDED
-    battNeeded = buffer
-    # FIND TIME SLOTS REMAINING FOR DRIVE
-    chunksLeft = int(hrsLeft * chunks)
-
-    for i in range(chunksLeft):
-        # GET VALUE FOR MILEAGE AND MPKW
-        mileage = driveDataByCar[str(car % 4)].loc[(i + ind) % drivingValues, 'mileage']
-        mpkw = driveDataByCar[str(car % 4)].loc[(i + ind) % drivingValues, 'mpkw']
-        # CALCULATE RATE OF BATT DECREASE
-        kwphr = mileage/mpkw
-        # INCREMENT BATTERY NEEDED
-        battNeeded += kwphr/chunks
-
-    return battNeeded
-
 
 #########################################################################
 # LOOK AT CARS OUTSIDE THE DEPOT
@@ -119,8 +99,7 @@ def driving(time, carDataDF, driveDataByCar, breaksDF, rcData, sim, ind):
 
         # FIND BATTERY NEEDED BY VEHICLE
         hrsLeft = (readTime(carDataDF.loc[car, 'latestEndShift']) - time).total_seconds()/3600
-        buffer = battSize * 10/100
-        battNeeded = predictBattNeeded(car, hrsLeft, buffer, driveDataByCar, ind)
+        battNeeded = predictBattNeeded(car, hrsLeft, battSize, driveDataByCar, ind)
 
         # IF CAR HAS BEEN RAPID CHARGING AND STILL NEEDS RAPID CHARGING, RAPID CHARGE
         if (rcChunks > 0) and (batt < battNeeded < battSize):

@@ -13,10 +13,10 @@ from graphFunctions import *
 outputFolder = "results/"
 tariff = "Octopus"
 rcNetwork = "Ecotricity"
-schedule = "shift3"
+schedule = "shift4"
 hasBreak = 0
-fleetType = 6
-runTime = 24*1                              # (UNITS:  HRS)
+fleetType = 0
+runTime = 24*5                              # (UNITS:  HRS)
 startTime = readTime("2019-01-01 06:00:00") # (FORMAT: DATETIME)
 
 # READ IN NECESSARY CSV FILES

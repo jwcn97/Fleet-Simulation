@@ -26,8 +26,8 @@ def rereadTime(ti):
 def incrementTime(ti):
     return (rereadTime(ti) + dt.timedelta(hours=1/chunks))
 
-# FIND THE START TIME OF NEXT SHIFT
-def nextShiftStart(carNum, carDataDF, shiftsByCar):
+# FIND THE START AND END TIME OF NEXT SHIFT
+def nextShift(carNum, carDataDF, shiftsByCar):
     # READ INDEX OF LATEST SHIFT AND INDEX OF THE LAST SHIFT
     shiftIndex = carDataDF.loc[carNum, 'shiftIndex']
     lastShiftIndex = len(shiftsByCar[str(carNum)])
@@ -35,14 +35,16 @@ def nextShiftStart(carNum, carDataDF, shiftsByCar):
     # IF NEXT SHIFT EXISTS, TAKE START TIME OF NEXT SHIFT
     if (shiftIndex + 1) < lastShiftIndex:
         nextStart = readTime(shiftsByCar[str(carNum)].loc[shiftIndex+1, 'startShift'])
+        nextEnd = readTime(shiftsByCar[str(carNum)].loc[shiftIndex+1, 'endShift'])
 
     # IF SHIFT INDEX GOES BEYOND LAST SHIFT, TAKE ARBITRARY LEAVETIME
     else:
         lastStart = shiftsByCar[str(carNum)].loc[lastShiftIndex-1, 'startShift']
         lastDay = readTime(lastStart).date() + dt.timedelta(days=1)
         nextStart = readTime(str(lastDay) + " 23:59:59")
+        nextEnd = nextStart
     
-    return nextStart
+    return nextStart, nextEnd
 
 # FIND THE NEXT ZONE WHERE TARIFF IS CHEAPER
 def nextLowTariffZone(time, pricesDF):
@@ -127,6 +129,25 @@ def adjustTotalCost(time, sim):
 
     return sim
 
+# PREDICT BATTERY NEEDED FOR DRIVING SHIFT
+def predictBattNeeded(car, hrsLeft, battSize, driveDataByCar, ind):
+    # READ TOTAL NUMBER OF DRIVING VALUES
+    drivingValues = driveDataByCar['0'].shape[0]
+    # SET BUFFER FOR BATTERY NEEDED
+    battNeeded = battSize * 10/100
+    # FIND TIME SLOTS REMAINING FOR DRIVE
+    chunksLeft = int(hrsLeft * chunks)
+
+    for i in range(chunksLeft):
+        # GET VALUE FOR MILEAGE AND MPKW
+        mileage = driveDataByCar[str(car % 4)].loc[(i + ind) % drivingValues, 'mileage']
+        mpkw = driveDataByCar[str(car % 4)].loc[(i + ind) % drivingValues, 'mpkw']
+        # CALCULATE RATE OF BATT DECREASE
+        kwphr = mileage/mpkw
+        # INCREMENT BATTERY NEEDED
+        battNeeded += kwphr/chunks
+
+    return battNeeded
 
 ################################################################
 # UNPACK SHIFT DATA FROM DATA FRAME INTO LIBRARY (SHIFTS BY CAR)
@@ -303,8 +324,8 @@ def predictExtraCharging(time, pricesDF, depot, carDataDF, shiftsByCar, availabl
         for cars in range(0, len(depot)):
             carNum = depot[cars]
 
-            # FIND THE START TIME OF NEXT SHIFT
-            nextStart = nextShiftStart(carNum, carDataDF, shiftsByCar)
+            # FIND THE START AND END TIME OF NEXT SHIFT
+            nextStart, nextEnd = nextShift(carNum, carDataDF, shiftsByCar)
 
             # IF VEHICLE IS GOING TO BE IN DEPOT DURING LOW TARIFF ZONE
             if nextStart > lowTariffStart:

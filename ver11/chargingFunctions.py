@@ -79,9 +79,10 @@ def charge(time, carDataDF, depot, sim, pricesDF):
     for index in range(len(depot)):
         car = depot[index]
 
-        # READ IN BATTERY, BATTERY SIZE AND CHARGE RATE
+        # READ IN BATTERY, BATTERY SIZE, BATTERY NEEDED AND CHARGE RATE
         batt = carDataDF.loc[car,'battkW']
         battSize = carDataDF.loc[car,'battSize']
+        battNeeded = carDataDF.loc[car, 'battNeeded']
         chargeRate = carDataDF.loc[car,'chargeRate']
 
         # DETERMINE EVENT STATUS
@@ -90,8 +91,8 @@ def charge(time, carDataDF, depot, sim, pricesDF):
         else:                  event = "wait"
 
         # TAKE INTO ACCOUNT VEHICLES REACHING FULL BATTERY
-        if batt + chargeRate/chunks >= battSize:
-            chargeRate = (battSize-batt)*chunks
+        if batt + chargeRate/chunks >= battNeeded:
+            chargeRate = (battNeeded-batt)*chunks
 
         # FIND PRICE OF CHARGE AT TIME
         #   * Read in start and end times of green zone
@@ -112,7 +113,7 @@ def charge(time, carDataDF, depot, sim, pricesDF):
 
         # APPEND DATA TO SIMULATION DATA
         # time, car, chargeDiff, batt, event, costPerCharge, totalCost
-        sim += [[time, car, round(chargeRate/chunks, 2), round(batt, 2), event, round(costOfCharge, 2), round(totalCost, 2)]]
+        sim += [[time, car, round(chargeRate/chunks, 2), round(batt, 2), event, round(costOfCharge, 3), round(totalCost, 3)]]
 
         # ASSIGN UPDATED TOTAL COST AND BATTERY KW
         carTotalCost = carDataDF.loc[car, 'totalCost']
@@ -182,8 +183,8 @@ def smartCharge_leavetime(time, carDataDF, depot, shiftsByCar, availablePower, c
     for cars in range(0, len(depot)):
         car = depot[cars]
 
-        # FIND THE START TIME OF NEXT SHIFT
-        nextStart = nextShiftStart(car, carDataDF, shiftsByCar)
+        # FIND THE START AND END TIME OF NEXT SHIFT
+        nextStart, nextEnd = nextShift(car, carDataDF, shiftsByCar)
 
         # CALCULATE TIME LEFT UNTIL CAR LEAVES AND APPEND TO LIST
         hrsLeft = ((rereadTime(nextStart) - rereadTime(time)).total_seconds())/(60*60)
@@ -318,10 +319,10 @@ def smartCharge_battOverLeavetime(time, carDataDF, depot, shiftsByCar, available
 
         # ONLY CONSIDER VEHICLES THAT ARE ATTACHED TO A CHARGE POINT AND WITHOUT FULL BATTERY
         if (~np.isnan(pt)) and (batt < battSize):
-            # FIND THE START TIME OF NEXT SHIFT
-            nextStart = nextShiftStart(carNum, carDataDF, shiftsByCar)
+            # FIND THE START AND END TIME OF NEXT SHIFT
+            nextStart, nextEnd = nextShift(carNum, carDataDF, shiftsByCar)
 
-            # CALCULATE TIME LEFT AND BATT NEEDED
+            # CALCULATE TIME LEFT AND BATT LEFT
             hrsLeft = ((rereadTime(nextStart) - rereadTime(time)).total_seconds())/(60*60)
             battLeft = battSize-batt
 
@@ -357,15 +358,15 @@ def costSensitiveCharge(time, carDataDF, depot, shiftsByCar, availablePower, cha
         # ALLOCATE CHARGE PT IF CAR DOESN'T HAVE ONE
         pt, carDataDF, chargePtDF = findChargePt(carDataDF, carNum, chargePtDF)
 
-        # FIND THE START TIME OF NEXT SHIFT
-        nextStart = nextShiftStart(carNum, carDataDF, shiftsByCar)
+        # FIND THE START AND END TIME OF NEXT SHIFT
+        nextStart, nextEnd = nextShift(carNum, carDataDF, shiftsByCar)
 
         # ONLY CONSIDER VEHICLES THAT ARE
         #   1) ATTACHED TO A CHARGE POINT
         #   2) WITHOUT FULL BATTERY
         #   3) NOT WAITING FOR LOW TARIFF ZONE
         if (~np.isnan(pt)) and (batt < battSize) and ~(time < lowTariffStart < nextStart):
-            # CALCULATE TIME LEFT AND BATT NEEDED
+            # CALCULATE TIME LEFT AND BATT LEFT
             hrsLeft = ((rereadTime(nextStart) - rereadTime(time)).total_seconds())/(60*60)
             battLeft = battSize-batt
 
@@ -407,18 +408,63 @@ def extraCharge(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF,
         #   1) ATTACHED TO A CHARGE POINT
         #   2) WITHOUT FULL BATTERY
         if (~np.isnan(pt)) and (batt < battSize):
-            # FIND THE START TIME OF NEXT SHIFT
-            nextStart = nextShiftStart(carNum, carDataDF, shiftsByCar)
+            # FIND THE START AND END TIME OF NEXT SHIFT
+            nextStart, nextEnd = nextShift(carNum, carDataDF, shiftsByCar)
 
             # IF VEHICLE IS WAITING FOR LOW TARIFF ZONE
             # IF EXTRA CHARGING EVENT HASN'T OCCURRED:
             if (time < lowTariffStart < nextStart) and (eventChange != "extraCharging"):
-                # DELAY CHARGING UNTIL IT'S TIME TO EXTRA CHARGE
+                # DELAY CHARGING
                 continue
             else:
-                # CALCULATE TIME LEFT AND BATT NEEDED
+                # CALCULATE TIME LEFT AND BATT LEFT
                 hrsLeft = ((rereadTime(nextStart) - rereadTime(time)).total_seconds())/(60*60)
                 battLeft = battSize-batt
+
+                # LET PRIORITY = BATTLEFT/TIME LEFT, APPEND TO LIST
+                priorityRows.append([carNum, battLeft/(hrsLeft**2), battLeft, pt])
+
+    # IN SORTED ORDER, CALCULATE PRIORITY RATIO AND CHARGE
+    carDataDF = priorityCharge(priorityRows, availablePower, carDataDF, chargePtDF)
+
+    return carDataDF
+
+# SIMILAR TO EXTRA CHARGE, BUT LOOKS AT REQUIRED BATTERY INSTEAD OF FULL BATTERY
+def predictiveCharge(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange):
+    # DEFINE NEXT LOW TARIFF ZONE
+    lowTariffStart, lowTariffEnd = nextLowTariffZone(time, pricesDF)
+
+    # CREATE A LIST FOR CARS AND THEIR LEAVETIME AND BATT NEEDED
+    priorityRows = []
+
+    # ***** CALCULATE PRIORITY FOR EACH CAR AND APPEND TO A LIST *****
+    for cars in range(0, len(depot)):
+        carNum = depot[cars]
+
+        # GET BATTERY, BATTERY SIZE AND BATTERY NEEDED
+        batt = carDataDF.loc[carNum, 'battkW']
+        battSize = carDataDF.loc[carNum, 'battSize']
+        battNeeded = carDataDF.loc[carNum, 'battNeeded']
+
+        # ALLOCATE CHARGE PT IF CAR DOESN'T HAVE ONE
+        pt, carDataDF, chargePtDF = findChargePt(carDataDF, carNum, chargePtDF)
+
+        # ONLY CONSIDER VEHICLES THAT ARE
+        #   1) ATTACHED TO A CHARGE POINT
+        #   2) STILL NEEDS BATTERY
+        if (~np.isnan(pt)) and (batt < battNeeded):
+            # FIND THE START AND END TIME OF NEXT SHIFT
+            nextStart, nextEnd = nextShift(carNum, carDataDF, shiftsByCar)
+
+            # IF VEHICLE IS WAITING FOR LOW TARIFF ZONE
+            # IF EXTRA CHARGING EVENT HASN'T OCCURRED:
+            if (time < lowTariffStart < nextStart) and (eventChange != "extraCharging"):
+                # DELAY CHARGING
+                continue
+            else:
+                # CALCULATE TIME LEFT AND BATT LEFT
+                hrsLeft = ((rereadTime(nextStart) - rereadTime(time)).total_seconds())/(60*60)
+                battLeft = battNeeded-batt
 
                 # LET PRIORITY = BATTLEFT/TIME LEFT, APPEND TO LIST
                 priorityRows.append([carNum, battLeft/(hrsLeft**2), battLeft, pt])

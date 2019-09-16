@@ -13,7 +13,7 @@ from graphFunctions import *
 outputFolder = "results/"
 tariff = "Octopus"
 rcNetwork = "Ecotricity"
-schedule = "shift3"
+schedule = "shift4"
 hasBreak = 0
 fleetType = 0
 runTime = 24*5                              # (UNITS:  HRS)
@@ -49,7 +49,8 @@ latLongData = pd.read_csv("csv/latLongData.csv", sep=";", index_col=None)
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, costSensitiveCharge)
 
 extraDF, extraRC, extraCost = runSimulation(startTime, runTime, rcData, latLongData,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, extraCharge)
+                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, predictiveCharge)
+styleDF(extraDF).to_excel('test5.xlsx')
 
 # resultDF = pd.DataFrame(columns=['dumbRC','leaveTRC','battRC','smartRC','costRC','extraRC',
 #                                 'dumbCost','leaveTCost','battCost','smartCost','costCost','extraCost'])

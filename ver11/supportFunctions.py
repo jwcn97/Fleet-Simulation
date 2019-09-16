@@ -26,23 +26,45 @@ def rereadTime(ti):
 def incrementTime(ti):
     return (rereadTime(ti) + dt.timedelta(hours=1/chunks))
 
-# FIND THE START TIME OF NEXT SHIFT
-def nextShiftStart(carNum, carDataDF, shiftsByCar):
+# FIND THE START AND END TIME OF NEXT SHIFT
+def nextShift(carNum, carDataDF, shiftsByCar):
     # READ INDEX OF LATEST SHIFT AND INDEX OF THE LAST SHIFT
     shiftIndex = carDataDF.loc[carNum, 'shiftIndex']
     lastShiftIndex = len(shiftsByCar[str(carNum)])
 
-    # IF NEXT SHIFT EXISTS, TAKE START TIME OF NEXT SHIFT
+    # IF NEXT SHIFT EXISTS, TAKE START TIME AND END TIME OF NEXT SHIFT
     if (shiftIndex + 1) < lastShiftIndex:
         nextStart = readTime(shiftsByCar[str(carNum)].loc[shiftIndex+1, 'startShift'])
+        nextEnd = readTime(shiftsByCar[str(carNum)].loc[shiftIndex+1, 'endShift'])
 
     # IF SHIFT INDEX GOES BEYOND LAST SHIFT, TAKE ARBITRARY LEAVETIME
     else:
         lastStart = shiftsByCar[str(carNum)].loc[lastShiftIndex-1, 'startShift']
         lastDay = readTime(lastStart).date() + dt.timedelta(days=1)
         nextStart = readTime(str(lastDay) + " 23:59:59")
+        nextEnd = nextStart
     
-    return nextStart
+    return nextStart, nextEnd
+
+# FIND THE START AND END TIME OF NEXT NEXT SHIFT
+def nextNextShift(carNum, carDataDF, shiftsByCar):
+    # READ INDEX OF LATEST SHIFT AND INDEX OF THE LAST SHIFT
+    shiftIndex = carDataDF.loc[carNum, 'shiftIndex']
+    lastShiftIndex = len(shiftsByCar[str(carNum)])
+
+    # IF NEXT NEXT SHIFT EXISTS, TAKE START TIME AND END TIME OF NEXT NEXT SHIFT
+    if (shiftIndex + 2) < lastShiftIndex:
+        nextStart = readTime(shiftsByCar[str(carNum)].loc[shiftIndex+2, 'startShift'])
+        nextEnd = readTime(shiftsByCar[str(carNum)].loc[shiftIndex+2, 'endShift'])
+
+    # IF SHIFT INDEX GOES BEYOND LAST SHIFT, TAKE ARBITRARY LEAVETIME
+    else:
+        lastStart = shiftsByCar[str(carNum)].loc[lastShiftIndex-1, 'startShift']
+        lastDay = readTime(lastStart).date() + dt.timedelta(days=1)
+        nextStart = readTime(str(lastDay) + " 23:59:59")
+        nextEnd = nextStart
+    
+    return nextStart, nextEnd
 
 # FIND THE NEXT ZONE WHERE TARIFF IS CHEAPER
 def nextLowTariffZone(time, pricesDF):
@@ -95,12 +117,12 @@ def generateDF(fleetData, latLongData, carCols, cpCols, latLongCols):
     # initialise car data
     car_data = []
     for (size,quantity) in eval(getData(fleetData, 'cars')):
-        # [inDepot, battSize, battkW,
+        # [inDepot, battSize, battkW, battNeeded,
         #  lat, long, destLat, destLong, destIndex
         #  chargePt, chargeRate, totalCost, totalDistance, 
         #  rcCount, rcChunks,
         #  shiftIndex, latestStartShift, latestEndShift]
-        car_data += [[1, size, size,
+        car_data += [[1, size, size, size,
                     depotLat, depotLong, np.nan, np.nan, 0,
                     np.nan, 0.0, 0.0, 0.0,
                     0, 0,
@@ -271,9 +293,10 @@ def inOutDepot(time, carDataDF, shiftsByCar, depot, latLongDF, chargePtDF, event
 
 # READ CARS WITH FULL BATTERY INTO SIMULATION
 def readFullBattCars(time, carDataDF, sim, eventChange):
-    # SELECT VEHICLES IN THE DEPOT WITH FULL BATTERY
+    # CREATE A SET FOR CARS THAT CURRENTLY HAVE FULL BATT
     chargeDF = carDataDF.loc[carDataDF['inDepot'] == 1]
     fullBattDF = chargeDF.loc[chargeDF['battkW'] == chargeDF['battSize']]
+    fullBattCars = set(fullBattDF.index.tolist())
 
     # IF CAR IS FULLY CHARGED, LET CHARGE RATE = 0 IN TO-CHARGE DF
     for row in range(len(fullBattDF)):
@@ -285,15 +308,33 @@ def readFullBattCars(time, carDataDF, sim, eventChange):
     prevSimData = sim[-len(carDataDF):]
     prevFullBattCars = set([rows[1] for rows in prevSimData if rows[4]=='full'])
 
-    # CREATE A SET FOR CARS THAT CURRENTLY HAVE FULL BATT
-    fullBattCars = set(fullBattDF.index.tolist())
-
     # IF NO. OF FULL BATT CARS >= PREVIOUS NO. OF FULL BATT CARS:
     if len(fullBattCars) >= len(prevFullBattCars):
         # AND IF INDEX OF FULL BATT CARS ARE DIFFERENT FROM PREVIOUS FULL BATT CARS:
         if fullBattCars != prevFullBattCars:
             # RECOGNISE AN EVENT HAS HAPPENED
             eventChange = "fullBatt"
+
+    return eventChange, carDataDF
+
+# READ CARS THAT HAS ACQUIRED ENOUGH BATTERY
+def readCarsWithEnoughBatt(time, carDataDF, sim, eventChange):
+    # CREATE A DF FOR CARS THAT CURRENTLY ALREADY HAVE ENOUGH BATT
+    chargeDF = carDataDF.loc[carDataDF['inDepot'] == 1]
+    exceedBattNeededDF = chargeDF.loc[chargeDF['battkW'] == chargeDF['battNeeded']]
+
+    # CREATE A SET FOR CARS THAT ARE CHARGING IN PREVIOUS TIME
+    prevSimData = sim[-len(carDataDF):]
+    prevChargingCars = set([rows[1] for rows in prevSimData if rows[4]=='charge'])
+
+    for row in range(len(exceedBattNeededDF)):
+        car = exceedBattNeededDF.index[row]
+        # INSTRUCT VEHICLE TO STOP CHARGING
+        carDataDF.loc[car, 'chargeRate'] = 0
+        # IF CAR IS STILL CHARGING BEFORE BUT HAS NOW ACQUIRE ENOUGH BATTERY
+        if car in prevChargingCars:
+            # RECOGNIZE AN EVENT HAS HAPPENED
+            eventChange = "exceedBattNeeded"
 
     return eventChange, carDataDF
 
@@ -328,8 +369,8 @@ def predictExtraCharging(time, pricesDF, depot, carDataDF, shiftsByCar, availabl
         for cars in range(0, len(depot)):
             carNum = depot[cars]
 
-            # FIND THE START TIME OF NEXT SHIFT
-            nextStart = nextShiftStart(carNum, carDataDF, shiftsByCar)
+            # FIND THE START AND END TIME OF NEXT SHIFT
+            nextStart, nextEnd = nextShift(carNum, carDataDF, shiftsByCar)
 
             # IF VEHICLE IS GOING TO BE IN DEPOT DURING LOW TARIFF ZONE
             if nextStart > lowTariffStart:
@@ -347,3 +388,67 @@ def predictExtraCharging(time, pricesDF, depot, carDataDF, shiftsByCar, availabl
 
     return eventChange
 
+
+###############################################
+# PREDICT BATTERY NEEDED FOR DRIVING SHIFT
+###############################################
+def predictBatteryNeeded(time, carDataDF, driveDataByCar, ind, shiftsByCar):
+    # FOR EACH VEHICLE
+    for car in range(len(carDataDF)):
+        # SET START AND END DRIVE TIME
+        if carDataDF.loc[car, 'inDepot']:
+            startDrive, endDrive = nextShift(car, carDataDF, shiftsByCar)
+            nextStartDrive, nextEndDrive = nextNextShift(car, carDataDF, shiftsByCar)
+        else:
+            startDrive, endDrive = time, readTime(carDataDF.loc[car, 'latestEndShift'])
+            nextStartDrive, nextEndDrive = nextShift(car, carDataDF, shiftsByCar)
+
+        # READ TOTAL NUMBER OF DRIVING VALUES
+        drivingValues = driveDataByCar['0'].shape[0]
+        # SET BUFFER FOR BATTERY NEEDED
+        batt = carDataDF.loc[car, 'battkW']
+        battSize = carDataDF.loc[car, 'battSize']
+        battNeeded = battSize * 10/100
+
+        # FIND TIME SLOTS LEFT TILL DRIVING (WILL BE 0 IF VEHICLE IS ALREADY DRIVING)
+        hrsLeft = (startDrive-time).total_seconds()/(60*60)
+        chunksLeft = int(hrsLeft * chunks)
+        # FIND TIME SLOTS WHERE VEHICLE WILL BE DRIVING
+        hrsDriving = (endDrive - startDrive).total_seconds()/(60*60)
+        chunksDriving = int(hrsDriving * chunks)
+        # FIND BATTERY NEEDED IN UPCOMING DRIVE
+        for i in range(chunksDriving):
+            # GET VALUE FOR MILEAGE AND MPKW
+            mileage = driveDataByCar[str(car % 4)].loc[(i + ind + chunksLeft) % drivingValues, 'mileage']
+            mpkw = driveDataByCar[str(car % 4)].loc[(i + ind + chunksLeft) % drivingValues, 'mpkw']
+            # CALCULATE RATE OF BATT DECREASE
+            kwphr = mileage/mpkw
+            # INCREMENT BATTERY NEEDED
+            battNeeded += kwphr/chunks
+
+        # FIND TIME SLOTS LEFT TILL NEXT DRIVING
+        hrsLeft = (nextEndDrive-time).total_seconds()/(60*60)
+        chunksLeft = int(hrsLeft * chunks)
+        # FIND TIME SLOTS WHERE VEHICLE WILL BE NEXT DRIVING
+        hrsDriving = (nextEndDrive - nextStartDrive).total_seconds()/(60*60)
+        chunksDriving = int(hrsDriving * chunks)
+        # FIND BATTERY NEEDED IN UPCOMING DRIVE
+        for i in range(chunksDriving):
+            # GET VALUE FOR MILEAGE AND MPKW
+            mileage = driveDataByCar[str(car % 4)].loc[(i + ind + chunksLeft) % drivingValues, 'mileage']
+            mpkw = driveDataByCar[str(car % 4)].loc[(i + ind + chunksLeft) % drivingValues, 'mpkw']
+            # CALCULATE RATE OF BATT DECREASE
+            kwphr = mileage/mpkw
+            # INCREMENT BATTERY NEEDED
+            # (BUT WEIGHTAGE IS LOWERED BECAUSE VEHICLE WILL BE CHARGING AFTER FIRST DRIVING CYCLE)
+            battNeeded += (kwphr/chunks)/3
+
+
+        # IF BATTERY NEEDED IS MORE THAN BATTERY SIZE, REQUIRE VEHICLE TO CHARGE TILL FULL
+        if battNeeded > battSize: battNeeded = battSize
+        # IF BATTERY ALREADY EXCEEDS BATTERY NEEDED, BATTERY NEEDED = BATTERY LEVEL
+        if battNeeded < batt: battNeeded = batt
+        # ASSIGN BATTERY NEEDED
+        carDataDF.loc[car, 'battNeeded'] = battNeeded
+
+    return carDataDF

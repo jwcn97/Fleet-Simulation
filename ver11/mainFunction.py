@@ -9,7 +9,7 @@ def runSimulation(startTime, runTime, rcData, latLongData,
 
     # INITIALISE MAIN DATAFRAMES WITH DATA AT START TIME
     #   Choose column names
-    carCols = ["inDepot","battSize","battkW",
+    carCols = ["inDepot","battSize","battkW","battNeeded",
                 "lat","long","destLat","destLong","destIndex",
                 "chargePt","chargeRate","totalCost","totalDistance",
                 "rcCount","rcChunks",
@@ -47,8 +47,12 @@ def runSimulation(startTime, runTime, rcData, latLongData,
         # *** RUN FUNCTIONS THAT INCLUDE WILL RECOGNISE CHANGES IN EVENTS ***
         eventChange, carDataDF, depot, chargePtDF = inOutDepot(time, carDataDF, shiftsByCar, depot, latLongDF, chargePtDF, eventChange)
         eventChange, carDataDF = readFullBattCars(time, carDataDF, sim, eventChange)
+        eventChange, carDataDF = readCarsWithEnoughBatt(time, carDataDF, sim, eventChange)
         eventChange = readTariffChanges(time, pricesDF, eventChange)
         eventChange = predictExtraCharging(time, pricesDF, depot, carDataDF, shiftsByCar, availablePower, eventChange)
+
+        # PREDICT BATTERY NEEDED BY VEHICLE AND UPDATE CARDATADF
+        carDataDF = predictBatteryNeeded(time, carDataDF, driveDataByCar, i, shiftsByCar)
 
         # *** RUN FUNCTIONS AFFECTING CARS OUTSIDE THE DEPOT ***
         # DECREASE BATT/RAPID CHARGE CARS OUTSIDE THE DEPOT
@@ -56,8 +60,8 @@ def runSimulation(startTime, runTime, rcData, latLongData,
 
         # *** RUN FUNCTIONS AFFECTING CARS IN THE DEPOT ***
         # IF THERE IS AN EVENT and THERE ARE CARS THAT REQUIRE CHARGING
-        # RUN CHARGING ALGORITHM
         if (eventChange != None) and (len(depot) > 0):
+            # RUN CHARGING ALGORITHM
             carDataDF = algo(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange)
 
         # CHARGE/READ WAITING CARS IN THE DEPOT
@@ -71,5 +75,7 @@ def runSimulation(startTime, runTime, rcData, latLongData,
 
     # CONVERT SIMULATION LIST TO DATAFRAME
     simulationDF = pd.DataFrame.from_records(sim, columns=simCols)
+
+    print(carDataDF['totalCost'].sum())
 
     return simulationDF, carDataDF['rcCount'].sum(), carDataDF['totalCost'].sum()

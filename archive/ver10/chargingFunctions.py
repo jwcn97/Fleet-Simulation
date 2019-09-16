@@ -182,8 +182,8 @@ def smartCharge_leavetime(time, carDataDF, depot, shiftsByCar, availablePower, c
     for cars in range(0, len(depot)):
         car = depot[cars]
 
-        # FIND THE START TIME OF NEXT SHIFT
-        nextStart = nextShiftStart(car, carDataDF, shiftsByCar)
+        # FIND THE START AND END TIME OF NEXT SHIFT
+        nextStart, nextEnd = nextShift(car, carDataDF, shiftsByCar)
 
         # CALCULATE TIME LEFT UNTIL CAR LEAVES AND APPEND TO LIST
         hrsLeft = ((rereadTime(nextStart) - rereadTime(time)).total_seconds())/(60*60)
@@ -318,8 +318,8 @@ def smartCharge_battOverLeavetime(time, carDataDF, depot, shiftsByCar, available
 
         # ONLY CONSIDER VEHICLES THAT ARE ATTACHED TO A CHARGE POINT AND WITHOUT FULL BATTERY
         if (~np.isnan(pt)) and (batt < battSize):
-            # FIND THE START TIME OF NEXT SHIFT
-            nextStart = nextShiftStart(carNum, carDataDF, shiftsByCar)
+            # FIND THE START AND END TIME OF NEXT SHIFT
+            nextStart, nextEnd = nextShift(carNum, carDataDF, shiftsByCar)
 
             # CALCULATE TIME LEFT AND BATT NEEDED
             hrsLeft = ((rereadTime(nextStart) - rereadTime(time)).total_seconds())/(60*60)
@@ -357,8 +357,8 @@ def costSensitiveCharge(time, carDataDF, depot, shiftsByCar, availablePower, cha
         # ALLOCATE CHARGE PT IF CAR DOESN'T HAVE ONE
         pt, carDataDF, chargePtDF = findChargePt(carDataDF, carNum, chargePtDF)
 
-        # FIND THE START TIME OF NEXT SHIFT
-        nextStart = nextShiftStart(carNum, carDataDF, shiftsByCar)
+        # FIND THE START AND END TIME OF NEXT SHIFT
+        nextStart, nextEnd = nextShift(carNum, carDataDF, shiftsByCar)
 
         # ONLY CONSIDER VEHICLES THAT ARE
         #   1) ATTACHED TO A CHARGE POINT
@@ -385,7 +385,7 @@ def costSensitiveCharge(time, carDataDF, depot, shiftsByCar, availablePower, cha
 #   IF YES, IT WILL STATE THAT AN EVENT HAS HAPPENED SO THAT THE ALGORITHM WILL RUN
 # CHARGE VEHICLE WHEN THE TIME COMES
 # CHARGE RATE = (PRIORITY/SUM OF ALL PRIORITIES)*AVAILABLE POWER
-def extraCharge(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange):
+def extraCharge(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, driveDataByCar, ind, eventChange):
     # DEFINE NEXT LOW TARIFF ZONE
     lowTariffStart, lowTariffEnd = nextLowTariffZone(time, pricesDF)
 
@@ -407,8 +407,8 @@ def extraCharge(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF,
         #   1) ATTACHED TO A CHARGE POINT
         #   2) WITHOUT FULL BATTERY
         if (~np.isnan(pt)) and (batt < battSize):
-            # FIND THE START TIME OF NEXT SHIFT
-            nextStart = nextShiftStart(carNum, carDataDF, shiftsByCar)
+            # FIND THE START AND END TIME OF NEXT SHIFT
+            nextStart, nextEnd = nextShift(carNum, carDataDF, shiftsByCar)
 
             # IF VEHICLE IS WAITING FOR LOW TARIFF ZONE
             # IF EXTRA CHARGING EVENT HASN'T OCCURRED:
