@@ -11,11 +11,11 @@ from graphFunctions import *
 
 # SELECT PARAMETERS
 outputFolder = "results/"
-company = "BritishGas"
+tariff = "Octopus"
+rcNetwork = "Ecotricity"
 schedule = "shift3"
 hasBreak = 0
 fleetType = 0
-rcType = 0
 runTime = 24*5                              # (UNITS:  HRS)
 startTime = readTime("2019-01-01 06:00:00") # (FORMAT: DATETIME)
 
@@ -23,13 +23,13 @@ startTime = readTime("2019-01-01 06:00:00") # (FORMAT: DATETIME)
 allShiftsDF = pd.read_csv("csv/schedules/" + schedule + ".csv", sep=";", index_col=None)
 drivingDF = pd.read_csv("csv/driving/constantDriving.csv", sep=";", index_col=None)
 pricesDF = pd.read_csv("csv/prices.csv", sep=";", index_col=None)
-pricesDF = pricesDF.loc[pricesDF.company == company]
+pricesDF = pricesDF.loc[pricesDF.company == tariff]
 breaksDF = pd.read_csv("csv/breaks.csv", sep=";", index_col=None)
 breaksDF = breaksDF.loc[breaksDF.id == hasBreak]
 fleetDF = pd.read_csv("csv/fleetData.csv", sep=";", index_col=None)
 fleetData = fleetDF.loc[fleetDF.index == fleetType]
 rcDF = pd.read_csv("csv/rcData.csv", sep=";", index_col=None)
-rcData = rcDF.loc[rcDF.index == rcType]
+rcData = rcDF.loc[rcDF.company == rcNetwork]
 
 latLongData = pd.read_csv("csv/latLongData.csv", sep=";", index_col=None)
 
@@ -48,8 +48,8 @@ latLongData = pd.read_csv("csv/latLongData.csv", sep=";", index_col=None)
 # costDF, costRC, costCost = runSimulation(startTime, runTime, rcData, latLongData,
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, costSensitiveCharge)
 
-# extraDF, extraRC, extraCost = runSimulation(startTime, runTime, rcData, latLongData,
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, extraCharge)
+extraDF, extraRC, extraCost = runSimulation(startTime, runTime, rcData, latLongData,
+                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, extraCharge)
 
 # resultDF = pd.DataFrame(columns=['dumbRC','leaveTRC','battRC','smartRC','costRC','extraRC',
 #                                 'dumbCost','leaveTCost','battCost','smartCost','costCost','extraCost'])

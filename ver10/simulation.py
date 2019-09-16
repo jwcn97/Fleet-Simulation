@@ -11,25 +11,25 @@ from graphFunctions import *
 
 # SELECT PARAMETERS
 outputFolder = "results/"
-company = "Octopus"
+tariff = "Octopus"
+rcNetwork = "Ecotricity"
 schedule = "shift3"
 hasBreak = 0
 fleetType = 6
-rcType = 0
-runTime = 24*5                              # (UNITS:  HRS)
+runTime = 24*1                              # (UNITS:  HRS)
 startTime = readTime("2019-01-01 06:00:00") # (FORMAT: DATETIME)
 
 # READ IN NECESSARY CSV FILES
 allShiftsDF = pd.read_csv("csv/schedules/" + schedule + ".csv", sep=";", index_col=None)
 drivingDF = pd.read_csv("csv/driving/constantDriving.csv", sep=";", index_col=None)
 pricesDF = pd.read_csv("csv/prices.csv", sep=";", index_col=None)
-pricesDF = pricesDF.loc[pricesDF.company == company]
+pricesDF = pricesDF.loc[pricesDF.company == tariff]
 breaksDF = pd.read_csv("csv/breaks.csv", sep=";", index_col=None)
 breaksDF = breaksDF.loc[breaksDF.id == hasBreak]
 fleetDF = pd.read_csv("csv/fleetData.csv", sep=";", index_col=None)
 fleetData = fleetDF.loc[fleetDF.index == fleetType]
 rcDF = pd.read_csv("csv/rcData.csv", sep=";", index_col=None)
-rcData = rcDF.loc[rcDF.index == rcType]
+rcData = rcDF.loc[rcDF.company == rcNetwork]
 
 # dumbDF, dumbRC, dumbCost = runSimulation(startTime, runTime, rcData,
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, dumbCharge)
@@ -48,7 +48,7 @@ rcData = rcDF.loc[rcDF.index == rcType]
 
 extraDF, extraRC, extraCost = runSimulation(startTime, runTime, rcData,
                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, extraCharge)
-styleDF(extraDF).to_excel('results/fleet' + str(fleetType) + '_case5_gold.xlsx')
+# styleDF(extraDF).to_excel('test2.xlsx')
 
 # resultDF = pd.DataFrame(columns=['dumbRC','leaveTRC','battRC','smartRC','costRC','extraRC',
 #                                 'dumbCost','leaveTCost','battCost','smartCost','costCost','extraCost'])

@@ -190,13 +190,33 @@ def rapidCharge(car, carDataDF, rcRate, rcPrice, totalCost):
 
     return carDataDF, totalCost, chargeDiff, costPerCharge
 
+# PREDICT BATTERY NEEDED TILL VEHICLE ENTERS DEPOT
+def predictBattNeeded(car, hrsLeft, buffer, driveDataByCar, ind):
+    # READ TOTAL NUMBER OF DRIVING VALUES
+    drivingValues = driveDataByCar['0'].shape[0]
+    # SET BUFFER FOR BATTERY NEEDED
+    battNeeded = buffer
+    # FIND TIME SLOTS REMAINING FOR DRIVE
+    chunksLeft = int(hrsLeft * chunks)
+
+    for i in range(chunksLeft):
+        # GET VALUE FOR MILEAGE AND MPKW
+        mileage = driveDataByCar[str(car % 4)].loc[(i + ind) % drivingValues, 'mileage']
+        mpkw = driveDataByCar[str(car % 4)].loc[(i + ind) % drivingValues, 'mpkw']
+        # CALCULATE RATE OF BATT DECREASE
+        kwphr = mileage/mpkw
+        # INCREMENT BATTERY NEEDED
+        battNeeded += kwphr/chunks
+
+    return battNeeded
+
 
 #########################################################################
 # LOOK AT CARS OUTSIDE THE DEPOT
 #   FOR CARS THAT NEED RAPID CHARGING: RAPID CHARGE
 #   FOR CARS THAT DON'T NEED RAPID CHARGING: DECREASE BATT
 #########################################################################
-def driving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, simulationDF, ind):
+def driving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, sim, ind):
     # EXTRACT RAPID CHARGE DATA
     rcPrice = getData(rcData, 'rcPrice')        # PRICE PER KW OF RAPID CHARGE (£ PER KW)
     rcPerc = getData(rcData, 'rcPerc')          # WHAT PERCENTAGE TO START RAPID CHARGING (%)
@@ -221,10 +241,9 @@ def driving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, simula
         # FIND BATTERY NEEDED BY VEHICLE
         hrsLeft = (readTime(carDataDF.loc[car, 'latestEndShift']) - time).total_seconds()/3600
         buffer = battSize * 10/100
-        kwphr = 4
-        battNeeded = hrsLeft*kwphr + buffer
+        battNeeded = predictBattNeeded(car, hrsLeft, buffer, driveDataByCar, ind)
 
-        # IF CAR HAS BEEN RAPID CHARGING AND STILL NEEDS RAPID CHARGING
+        # IF CAR HAS BEEN RAPID CHARGING AND STILL NEEDS RAPID CHARGING, RAPID CHARGE
         if (rcChunks > 0) and (batt < battNeeded < battSize):
             # RAPID CHARGE VEHICLE
             carDataDF, totalCost, chargeDiff, costPerCharge = rapidCharge(car, carDataDF, rcRate, rcPrice, totalCost)
@@ -233,7 +252,7 @@ def driving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, simula
             # LABEL EVENT
             event = 'RC'
 
-        # IF CAR HASN'T BEEN RAPID CHARGING BUT NEEDS RAPID CHARGING
+        # IF CAR HASN'T BEEN RAPID CHARGING BUT NEEDS RAPID CHARGING, RAPID CHARGE
         elif (batt < battSize*rcPerc/100) and (batt < battNeeded < battSize):
             # RAPID CHARGE VEHICLE
             carDataDF, totalCost, chargeDiff, costPerCharge = rapidCharge(car, carDataDF, rcRate, rcPrice, totalCost)
@@ -253,14 +272,7 @@ def driving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, simula
             event = 'wait' if kwphr == 0.0 else 'drive'
 
         # UPDATE SIMULATION ACCORDINGLY
-        simulationDF = simulationDF.append({
-            'time': time,
-            'car': car,
-            'chargeDiff': chargeDiff,
-            'batt': round(batt, 1),
-            'event': event,
-            'costPerCharge': costPerCharge,
-            'totalCost': round(totalCost, 2)
-        }, ignore_index=True)
+        # time, car, chargeDiff, batt, event, costPerCharge, totalCost
+        sim += [[time, car, chargeDiff, round(batt, 2), event, costPerCharge, round(totalCost, 2)]]
 
-    return carDataDF, simulationDF
+    return carDataDF, sim

@@ -82,7 +82,7 @@ def getData(df, col):
     return df[col].values[0]
 
 # GENERATE CARDATADF, CHARGEPTDF AND SIMULATIONDF
-def generateDF(fleetData, latLongData, carCols, cpCols, simCols, latLongCols):
+def generateDF(fleetData, latLongData, carCols, cpCols, latLongCols):
     # initialise charge points data
     chargePt_data = []
     for (rate,quantity) in eval(getData(fleetData, 'chargePts')):
@@ -109,7 +109,6 @@ def generateDF(fleetData, latLongData, carCols, cpCols, simCols, latLongCols):
     # initialise dataframes
     carDataDF = pd.DataFrame.from_records(car_data, columns=carCols)
     chargePtDF = pd.DataFrame.from_records(chargePt_data, columns=cpCols)
-    simulationDF = pd.DataFrame(columns=simCols)
     
     # assign available charge points to cars
     for cp_id in range(len(chargePt_data)):
@@ -128,20 +127,21 @@ def generateDF(fleetData, latLongData, carCols, cpCols, simCols, latLongCols):
             "destinations": destinations
         }, ignore_index=True)        
 
-    return carDataDF, chargePtDF, simulationDF, latLongDF
+    return carDataDF, chargePtDF, latLongDF
 
 # CHOOSE MAX TOTAL COST OF THE ROW
-def adjustTotalCost(time, simulationDF):
-    # SELECT ROWS IN SIMULATION WHERE TIME == TIME
-    selectRows = simulationDF.loc[simulationDF['time']==time]
+def adjustTotalCost(time, sim):
+    # SELECT THE MAXIMUM VALUE IN THE TOTAL COST COLUMN FOR CURRENT TIME
+    maxCost = max([rows[-1] for rows in sim if rows[0]==time])
 
-    # SELECT THE MAXIMUM VALUE IN THE TOTAL COST COLUMN
-    maxCost = selectRows['totalCost'].max()
+    # REPLACE EVERY OTHER TOTAL COST VALUE WITH MAXIMUM VALUE FOR CURRENT TIME
+    i = len(sim) - 1
+    while i >= 0 :
+        sim[i][-1] = maxCost
+        i -= 1
+        if sim[i][0] != time: break
 
-    # REPLACE EVERY OTHER TOTAL COST VALUE WITH MAXIMUM VALUE FOR THIS TIME
-    simulationDF.loc[simulationDF['time']==time, 'totalCost'] = maxCost
-
-    return simulationDF
+    return sim
 
 
 ################################################################
@@ -269,8 +269,8 @@ def inOutDepot(time, carDataDF, shiftsByCar, depot, latLongDF, chargePtDF, event
 
     return eventChange, carDataDF, depot, chargePtDF
 
-# READ CARS WITH FULL BATTERY INTO SIMULATION DF
-def readFullBattCars(time, carDataDF, simulationDF, eventChange):
+# READ CARS WITH FULL BATTERY INTO SIMULATION
+def readFullBattCars(time, carDataDF, sim, eventChange):
     # SELECT VEHICLES IN THE DEPOT WITH FULL BATTERY
     chargeDF = carDataDF.loc[carDataDF['inDepot'] == 1]
     fullBattDF = chargeDF.loc[chargeDF['battkW'] == chargeDF['battSize']]
@@ -282,9 +282,8 @@ def readFullBattCars(time, carDataDF, simulationDF, eventChange):
 
     # ***** IF NEW CARS REACH FULL BATT, RECOGNISE EVENT *****
     # CREATE A SET FOR CARS THAT HAD FULL BATT IN PREVIOUS TIME
-    prevSimData = simulationDF.iloc[-len(carDataDF):]
-    prevFullBatt = prevSimData.loc[prevSimData['event']=="full"]
-    prevFullBattCars = set(prevFullBatt['car'].values.tolist())
+    prevSimData = sim[-len(carDataDF):]
+    prevFullBattCars = set([rows[1] for rows in prevSimData if rows[4]=='full'])
 
     # CREATE A SET FOR CARS THAT CURRENTLY HAVE FULL BATT
     fullBattCars = set(fullBattDF.index.tolist())
@@ -314,8 +313,8 @@ def readTariffChanges(time, pricesDF, eventChange):
 
     return eventChange
 
-# READ WHETHER NECESSARY TO CHARGE VEHICLES BEFORE LOW TARIFF ZONE
-def readExtraCharging(time, pricesDF, depot, carDataDF, shiftsByCar, availablePower, eventChange):
+# PREDICT WHETHER VEHICLES NEED EXTRA CHARGING BEFORE LOW TARIFF ZONE
+def predictExtraCharging(time, pricesDF, depot, carDataDF, shiftsByCar, availablePower, eventChange):
     # DEFINE NEXT LOW TARIFF ZONE
     lowTariffStart, lowTariffEnd = nextLowTariffZone(time, pricesDF)
 

@@ -71,7 +71,7 @@ def priorityCharge(priorityRows, availablePower, carDataDF, chargePtDF):
     return carDataDF
 
 # CHARGE VEHICLE FOR ONE HOUR
-def charge(time, carDataDF, depot, simulationDF, pricesDF):
+def charge(time, carDataDF, depot, sim, pricesDF):
     # GET TOTAL COST OF ALL VEHICLES
     totalCost = carDataDF['totalCost'].sum()
 
@@ -111,24 +111,15 @@ def charge(time, carDataDF, depot, simulationDF, pricesDF):
         totalCost += costOfCharge
 
         # APPEND DATA TO SIMULATION DATA
-        simulationDF = simulationDF.append({
-            'time': time,
-            'car': car,
-            'chargeDiff': round(chargeRate/chunks, 2),
-            'batt': round(batt, 2),
-            'event': event,
-            'costPerCharge': round(costOfCharge, 2) if chargeRate > 0 else 0,
-            'totalCost': round(totalCost, 2)
-        }, ignore_index=True)
+        # time, car, chargeDiff, batt, event, costPerCharge, totalCost
+        sim += [[time, car, round(chargeRate/chunks, 2), round(batt, 2), event, round(costOfCharge, 2), round(totalCost, 2)]]
 
-        # ASSIGN UPDATED BATTERY KW
-        carDataDF.loc[car, 'battkW'] = batt + chargeRate/chunks
-
-        # ASSIGN UPDATED TOTAL COST
+        # ASSIGN UPDATED TOTAL COST AND BATTERY KW
         carTotalCost = carDataDF.loc[car, 'totalCost']
         carDataDF.loc[car, 'totalCost'] = carTotalCost + costOfCharge
+        carDataDF.loc[car, 'battkW'] = batt + chargeRate/chunks
 
-    return carDataDF, simulationDF
+    return carDataDF, sim
 
 
 #################################
