@@ -34,6 +34,8 @@ def runSimulation(startTime, runTime, rcData, latLongData,
     
     # CREATE LIBRARY FOR SHIFTS BY CAR
     shiftsByCar = unpackShifts(carDataDF, allShiftsDF)
+    # GET STATUS OF DEPOT AT EVERY TIME
+    depotStatus = getDepotStatus(carDataDF, shiftsByCar)
     # RETRIEVE AVAILABLE POWER FROM FLEET DATA
     availablePower = getData(fleetData, 'availablePower')
     # CHOOSE START TIME
@@ -75,7 +77,5 @@ def runSimulation(startTime, runTime, rcData, latLongData,
 
     # CONVERT SIMULATION LIST TO DATAFRAME
     simulationDF = pd.DataFrame.from_records(sim, columns=simCols)
-
-    print(carDataDF['totalCost'].sum())
 
     return simulationDF, carDataDF['rcCount'].sum(), carDataDF['totalCost'].sum()

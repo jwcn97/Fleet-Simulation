@@ -218,6 +218,53 @@ def unpackShifts(carData, allShiftsDF):
 
     return shiftsByCar
 
+################################################################
+# GET STATUS OF DEPOT AT EVERY TIME
+################################################################
+def getDepotStatus(carData, shiftsByCar):
+    eventTimes = pd.DataFrame(columns=["time","car","events"])
+
+    # FOR ALL CARS:
+    for car in range(len(carData)):
+        # PICK OUT SHIFTS FOR A VEHICLE
+        carShifts = shiftsByCar[str(car)]
+        # FOR EACH SHIFT
+        for shifts in range(len(carShifts)):
+            eventTimes = eventTimes.append({
+                "time": readTime(carShifts.loc[shifts, 'startShift']),
+                "car": car,
+                "events": -1
+            }, ignore_index=True)
+
+            eventTimes = eventTimes.append({
+                "time": readTime(carShifts.loc[shifts, 'endShift']),
+                "car": car,
+                "events": 1
+            }, ignore_index=True)
+    
+    eventTimes = eventTimes.sort_values(by=["time"], ascending=True)
+    eventTimes = eventTimes.reset_index(drop=True)
+
+    def toSet(x): return set(x)
+
+    curr_set = {0,1,2,3}
+    shiftByTimes = eventTimes.groupby('time').agg({'events': sum, 'car': toSet})
+    shiftByTimes.insert(0, 'time', shiftByTimes.index)
+    shiftByTimes = shiftByTimes.reset_index(drop=True)
+
+    for shifts in range(len(eventTimes)):
+        car = eventTimes.loc[shifts,'car']
+        curr_event = eventTimes.loc[shifts,'events']
+        curr_index = shiftByTimes.loc[shiftByTimes['time'] == eventTimes.loc[shifts,'time']].index.values[0]
+
+        # CAR ENTERS DEPOT
+        if curr_event > 0: curr_set = curr_set.union({car})
+        # CAR LEAVES DEPOT
+        else:              curr_set = curr_set - {car}
+            
+        shiftByTimes.at[curr_index,'car'] = curr_set
+    
+    return shiftByTimes
 
 ##############################################
 # FUNCTIONS WHICH CHECK FOR EVENTS

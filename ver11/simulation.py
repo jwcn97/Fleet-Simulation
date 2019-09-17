@@ -53,7 +53,6 @@ extraDF, extraRC, extraCost = runSimulation(startTime, runTime, rcData, latLongD
 
 # predictiveDF, predictiveRC, predictiveCost = runSimulation(startTime, runTime, rcData, latLongData,
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, predictiveCharge)
-# styleDF(predictiveDF).to_excel('test2.xlsx')
 
 # resultDF = pd.DataFrame(columns=['dumbRC','leaveTRC','battRC','smartRC','costRC','extraRC',
 #                                 'dumbCost','leaveTCost','battCost','smartCost','costCost','extraCost'])
