@@ -90,9 +90,9 @@ def latLongToMiles(lat1, long1, lat2, long2):
     return arc*3960
 
 # UPDATE THE LAT AND LONG OF VEHICLE WHILE DRIVING
-#   distance = distance going to be travelled by vehicle in this time slot
+#   miles = miles going to be travelled by vehicle in this time slot
 #   (dependent on number of chunks)
-def updateLatLong(car, carDataDF, latLongDF, distance):
+def updateLatLong(car, carDataDF, latLongDF, miles):
     # GET ALL DESTINATIONS OF VEHICLE
     destinations = latLongDF.loc[car,'destinations']
     # GET INDEX OF NEXT DESTINATION
@@ -104,11 +104,11 @@ def updateLatLong(car, carDataDF, latLongDF, distance):
     # CALCULATE BEARING OR DIRECTION OF TRAVEL
     bearing = calculateBearing((currLat, currLong),(destLat, destLong))
     # CALCULATE NEXT LATITUDE AND LONGITUDE FOR NEXT TIME FRAME
-    newLat, newLong = milesToLatLong(currLat, currLong, bearing, distance)
+    newLat, newLong = milesToLatLong(currLat, currLong, bearing, miles)
 
     # IF LATITUDE PASSES BY DESTINATION LATITUDE
     #   VEHICLE HAS REACHED ITS INTENDED DESTINATION
-    if (currLat < destLat < newLat) or (newLat < destLat < currLat):
+    if (currLat < destLat < newLat) or (currLat > destLat > newLat):
         # SET NEW LAT AND LONG TO THAT OF DESTINATION'S
         newLat, newLong = destLat, destLong
         # ENSURE THE CYCLE REPEATS
@@ -196,7 +196,7 @@ def rapidCharge(car, carDataDF, rcRate, rcPrice, totalCost):
 #   FOR CARS THAT NEED RAPID CHARGING: RAPID CHARGE
 #   FOR CARS THAT DON'T NEED RAPID CHARGING: DECREASE BATT
 #########################################################################
-def driving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, sim, ind):
+def driving(time, carDataDF, driveDataByCar, ind, breaksDF, rcData, latLongDF, sim):
     # EXTRACT RAPID CHARGE DATA
     rcPrice = getData(rcData, 'rcPrice')        # PRICE PER KW OF RAPID CHARGE (£ PER KW)
     rcPerc = getData(rcData, 'rcPerc')          # WHAT PERCENTAGE TO START RAPID CHARGING (%)

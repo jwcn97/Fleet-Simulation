@@ -292,7 +292,7 @@ def inOutDepot(time, carDataDF, shiftsByCar, depot, latLongDF, chargePtDF, event
     return eventChange, carDataDF, depot, chargePtDF
 
 # READ CARS WITH FULL BATTERY INTO SIMULATION
-def readFullBattCars(time, carDataDF, sim, eventChange):
+def readFullBattCars(carDataDF, sim, eventChange):
     # CREATE A SET FOR CARS THAT CURRENTLY HAVE FULL BATT
     chargeDF = carDataDF.loc[carDataDF['inDepot'] == 1]
     fullBattDF = chargeDF.loc[chargeDF['battkW'] == chargeDF['battSize']]
@@ -318,7 +318,7 @@ def readFullBattCars(time, carDataDF, sim, eventChange):
     return eventChange, carDataDF
 
 # READ CARS THAT HAS ACQUIRED ENOUGH BATTERY
-def readCarsWithEnoughBatt(time, carDataDF, sim, eventChange):
+def readCarsWithEnoughBatt(carDataDF, sim, eventChange):
     # CREATE A DF FOR CARS THAT CURRENTLY ALREADY HAVE ENOUGH BATT
     chargeDF = carDataDF.loc[carDataDF['inDepot'] == 1]
     exceedBattNeededDF = chargeDF.loc[chargeDF['battkW'] == chargeDF['battNeeded']]
@@ -356,34 +356,31 @@ def readTariffChanges(time, pricesDF, eventChange):
 
 # PREDICT WHETHER VEHICLES NEED EXTRA CHARGING BEFORE LOW TARIFF ZONE
 def predictExtraCharging(time, pricesDF, depot, carDataDF, shiftsByCar, availablePower, eventChange):
-    # DEFINE NEXT LOW TARIFF ZONE
-    lowTariffStart, lowTariffEnd = nextLowTariffZone(time, pricesDF)
-
     # MAKE SURE ALL VEHICLES ARE IN DEPOT (TO TAKE INTO ACCOUNT BATTERY OF ALL VEHICLES)
     if len(depot) == len(carDataDF):
+        # DEFINE NEXT LOW TARIFF ZONE
+        lowTariffStart, lowTariffEnd = nextLowTariffZone(time, pricesDF)
         # CALCULATE TOTAL BATTERY PROVIDED IN LOW TARIFF ZONE
         totalBattAvailable = (lowTariffEnd - lowTariffStart).total_seconds()*availablePower/(60*60)
 
         # ***** CALCULATE TOTAL BATTERY NEEDED IN LOW TARIFF ZONE *****
         totalBattLeft = 0
-        for cars in range(0, len(depot)):
-            carNum = depot[cars]
-
+        for cars in range(len(carDataDF)):
+            carNum = carDataDF.index[cars]
             # FIND THE START AND END TIME OF NEXT SHIFT
             nextStart, nextEnd = nextShift(carNum, carDataDF, shiftsByCar)
-
             # IF VEHICLE IS GOING TO BE IN DEPOT DURING LOW TARIFF ZONE
             if nextStart > lowTariffStart:
                 # APPEND BATTERY LEFT TO TOTAL BATT LEFT
-                totalBattLeft += carDataDF.loc[carNum,'battSize']-carDataDF.loc[carNum,'battkW']
+                totalBattLeft += carDataDF.loc[carNum,'battNeeded']-carDataDF.loc[carNum,'battkW']
 
         # IF TOTAL BATT LEFT IS MORE THAN THAT PROVIDED, ALLOCATE BUFFER TIME BEFORE LOW TARIFF START FOR VEHICLES TO CHARGE
-        #   IF TIME == ALLOCATED TIME BEFORE LOW TARIFF START, CHARGE NOW (INSTEAD OF WAITING TILL LOW TARIFF ZONE)
         if totalBattLeft > totalBattAvailable:
             bufferHrs = (totalBattLeft - totalBattAvailable)/availablePower
             bufferSlots = int(np.ceil(bufferHrs*chunks))
-
-            if time == lowTariffStart-dt.timedelta(hours=bufferSlots/chunks):
+            # IF TIME == ALLOCATED TIME BEFORE LOW TARIFF START
+            if time == lowTariffStart - dt.timedelta(hours = bufferSlots/chunks):
+                # TRIGGER ALGORITHM TO CHARGE VEHICLE NOW (INSTEAD OF WAITING TILL LOW TARIFF ZONE)
                 eventChange = "extraCharging"
 
     return eventChange
@@ -410,6 +407,9 @@ def predictBatteryNeeded(time, carDataDF, driveDataByCar, ind, shiftsByCar):
         battSize = carDataDF.loc[car, 'battSize']
         battNeeded = battSize * 10/100
 
+        """
+        predict battery needed for the most immediate driving cycle
+        """
         # FIND TIME SLOTS LEFT TILL DRIVING (WILL BE 0 IF VEHICLE IS ALREADY DRIVING)
         hrsLeft = (startDrive-time).total_seconds()/(60*60)
         chunksLeft = int(hrsLeft * chunks)
@@ -426,6 +426,9 @@ def predictBatteryNeeded(time, carDataDF, driveDataByCar, ind, shiftsByCar):
             # INCREMENT BATTERY NEEDED
             battNeeded += kwphr/chunks
 
+        """
+        predict battery needed for the next driving cycle
+        """
         # FIND TIME SLOTS LEFT TILL NEXT DRIVING
         hrsLeft = (nextEndDrive-time).total_seconds()/(60*60)
         chunksLeft = int(hrsLeft * chunks)
@@ -440,7 +443,7 @@ def predictBatteryNeeded(time, carDataDF, driveDataByCar, ind, shiftsByCar):
             # CALCULATE RATE OF BATT DECREASE
             kwphr = mileage/mpkw
             # INCREMENT BATTERY NEEDED
-            # (BUT WEIGHTAGE IS LOWERED BECAUSE VEHICLE WILL BE CHARGING AFTER FIRST DRIVING CYCLE)
+            # (WEIGHTAGE IS LOWERED BECAUSE VEHICLE WILL BE CHARGING AFTER MOST IMMEDIATE DRIVING CYCLE)
             battNeeded += (kwphr/chunks)/3
 
 

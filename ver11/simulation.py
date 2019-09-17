@@ -49,8 +49,11 @@ latLongData = pd.read_csv("csv/latLongData.csv", sep=";", index_col=None)
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, costSensitiveCharge)
 
 extraDF, extraRC, extraCost = runSimulation(startTime, runTime, rcData, latLongData,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, predictiveCharge)
-styleDF(extraDF).to_excel('test5.xlsx')
+                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, extraCharge)
+
+# predictiveDF, predictiveRC, predictiveCost = runSimulation(startTime, runTime, rcData, latLongData,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, predictiveCharge)
+# styleDF(predictiveDF).to_excel('test2.xlsx')
 
 # resultDF = pd.DataFrame(columns=['dumbRC','leaveTRC','battRC','smartRC','costRC','extraRC',
 #                                 'dumbCost','leaveTCost','battCost','smartCost','costCost','extraCost'])

@@ -46,21 +46,21 @@ def runSimulation(startTime, runTime, rcData, latLongData,
 
         # *** RUN FUNCTIONS THAT INCLUDE WILL RECOGNISE CHANGES IN EVENTS ***
         eventChange, carDataDF, depot, chargePtDF = inOutDepot(time, carDataDF, shiftsByCar, depot, latLongDF, chargePtDF, eventChange)
-        eventChange, carDataDF = readFullBattCars(time, carDataDF, sim, eventChange)
-        eventChange, carDataDF = readCarsWithEnoughBatt(time, carDataDF, sim, eventChange)
+        eventChange, carDataDF = readFullBattCars(carDataDF, sim, eventChange)
+        # eventChange, carDataDF = readCarsWithEnoughBatt(carDataDF, sim, eventChange)
         eventChange = readTariffChanges(time, pricesDF, eventChange)
         eventChange = predictExtraCharging(time, pricesDF, depot, carDataDF, shiftsByCar, availablePower, eventChange)
 
-        # PREDICT BATTERY NEEDED BY VEHICLE AND UPDATE CARDATADF
-        carDataDF = predictBatteryNeeded(time, carDataDF, driveDataByCar, i, shiftsByCar)
+        # # PREDICT BATTERY NEEDED BY VEHICLE AND UPDATE CARDATADF
+        # carDataDF = predictBatteryNeeded(time, carDataDF, driveDataByCar, i, shiftsByCar)
 
         # *** RUN FUNCTIONS AFFECTING CARS OUTSIDE THE DEPOT ***
         # DECREASE BATT/RAPID CHARGE CARS OUTSIDE THE DEPOT
-        carDataDF, sim = driving(time, carDataDF, driveDataByCar, breaksDF, rcData, latLongDF, sim, i)
+        carDataDF, sim = driving(time, carDataDF, driveDataByCar, i, breaksDF, rcData, latLongDF, sim)
 
         # *** RUN FUNCTIONS AFFECTING CARS IN THE DEPOT ***
-        # IF THERE IS AN EVENT and THERE ARE CARS THAT REQUIRE CHARGING
-        if (eventChange != None) and (len(depot) > 0):
+        # IF THERE IS AN EVENT CHANGE and THERE ARE CARS THAT REQUIRE CHARGING
+        if (eventChange) and (len(depot) > 0):
             # RUN CHARGING ALGORITHM
             carDataDF = algo(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange)
 

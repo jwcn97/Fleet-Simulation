@@ -90,19 +90,19 @@ def charge(time, carDataDF, depot, sim, pricesDF):
         elif batt == battSize: event = "full"
         else:                  event = "wait"
 
-        # TAKE INTO ACCOUNT VEHICLES REACHING FULL BATTERY
-        if batt + chargeRate/chunks >= battNeeded:
-            chargeRate = (battNeeded-batt)*chunks
+        # TAKE INTO ACCOUNT VEHICLES REACHING UPPER LIMIT
+        if chargeRate >= (battSize-batt)*chunks:
+            chargeRate = (battSize-batt)*chunks
 
         # FIND PRICE OF CHARGE AT TIME
         #   * Read in start and end times of green zone
-        lowTariffStartHr = getData(pricesDF, 'startGreenZone')
-        lowTariffEndHr = getData(pricesDF, 'endGreenZone')
+        lowTariffStartHr = readTime(getData(pricesDF, 'startGreenZone'))
+        lowTariffEndHr = readTime(getData(pricesDF, 'endGreenZone'))
         #   * Read in current time without date
         timeHr = readTime(str(time.time()))
 
         # USE APPROPRIATE PRICING BASED ON CURRENT TIME
-        if readTime(lowTariffStartHr) <= timeHr < readTime(lowTariffEndHr):
+        if lowTariffStartHr <= timeHr < lowTariffEndHr:
             price = float(getData(pricesDF, 'priceGreenZone'))
         else:
             price = float(getData(pricesDF, 'priceRedZone'))
