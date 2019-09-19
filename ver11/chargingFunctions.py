@@ -71,13 +71,15 @@ def priorityCharge(priorityRows, availablePower, carDataDF, chargePtDF):
     return carDataDF
 
 # CHARGE VEHICLE FOR ONE HOUR
-def charge(time, carDataDF, depot, sim, pricesDF):
+def charge(time, carDataDF, sim, pricesDF):
     # GET TOTAL COST OF ALL VEHICLES
     totalCost = carDataDF['totalCost'].sum()
+    # SELECT CARS IN DEPOT
+    inDepotDF = carDataDF.loc[carDataDF['inDepot'] == 1]
 
     # FOR EVERY CAR IN THE DEPOT
-    for index in range(len(depot)):
-        car = depot[index]
+    for index in range(len(inDepotDF)):
+        car = inDepotDF.index[index]
 
         # READ IN BATTERY, BATTERY SIZE, BATTERY NEEDED AND CHARGE RATE
         batt = carDataDF.loc[car,'battkW']
@@ -91,8 +93,8 @@ def charge(time, carDataDF, depot, sim, pricesDF):
         else:                  event = "wait"
 
         # TAKE INTO ACCOUNT VEHICLES REACHING UPPER LIMIT
-        if chargeRate >= (battSize-batt)*chunks:
-            chargeRate = (battSize-batt)*chunks
+        if chargeRate >= (battNeeded-batt)*chunks:
+            chargeRate = (battNeeded-batt)*chunks
 
         # FIND PRICE OF CHARGE AT TIME
         #   * Read in start and end times of green zone

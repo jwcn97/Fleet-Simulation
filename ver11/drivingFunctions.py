@@ -220,7 +220,7 @@ def driving(time, carDataDF, driveDataByCar, ind, breaksDF, rcData, latLongDF, s
         rcChunks = carDataDF.loc[car,'rcChunks']
 
         # IF CAR HAS BEEN RAPID CHARGING AND STILL NEEDS RAPID CHARGING, RAPID CHARGE
-        if (rcChunks > 0) and (batt < battNeeded < battSize):
+        if (rcChunks > 0) and (batt < battNeeded):
             # RAPID CHARGE VEHICLE
             carDataDF, totalCost, chargeDiff, costPerCharge = rapidCharge(car, carDataDF, rcRate, rcPrice, totalCost)
             # UPDATE RC PARAMETERS
@@ -229,7 +229,7 @@ def driving(time, carDataDF, driveDataByCar, ind, breaksDF, rcData, latLongDF, s
             event = 'RC'
 
         # IF CAR HASN'T BEEN RAPID CHARGING BUT NEEDS RAPID CHARGING, RAPID CHARGE
-        elif (batt < battSize*rcPerc/100) and (batt < battNeeded < battSize):
+        elif (batt < battSize*rcPerc/100) and (batt < battNeeded):
             # RAPID CHARGE VEHICLE
             carDataDF, totalCost, chargeDiff, costPerCharge = rapidCharge(car, carDataDF, rcRate, rcPrice, totalCost)
             # UPDATE RC PARAMETERS

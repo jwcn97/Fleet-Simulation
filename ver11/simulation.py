@@ -11,11 +11,11 @@ from graphFunctions import *
 
 # SELECT PARAMETERS
 outputFolder = "results/"
-tariff = "Octopus"
+tariff = "BritishGas"
 rcNetwork = "Ecotricity"
 schedule = "shift4"
 hasBreak = 0
-fleetType = 0
+fleetType = 6
 runTime = 24*5                              # (UNITS:  HRS)
 startTime = readTime("2019-01-01 06:00:00") # (FORMAT: DATETIME)
 
@@ -49,7 +49,8 @@ latLongData = pd.read_csv("csv/latLongData.csv", sep=";", index_col=None)
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, costSensitiveCharge)
 
 extraDF, extraRC, extraCost = runSimulation(startTime, runTime, rcData, latLongData,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, extraCharge)
+                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, predictiveCharge)
+# styleDF(extraDF).to_excel('test.xlsx')
 
 # predictiveDF, predictiveRC, predictiveCost = runSimulation(startTime, runTime, rcData, latLongData,
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, predictiveCharge)
