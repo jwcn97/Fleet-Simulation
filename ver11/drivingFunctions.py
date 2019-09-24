@@ -96,7 +96,7 @@ def updateLatLong(car, carDataDF, latLongDF, miles):
     # GET ALL DESTINATIONS OF VEHICLE
     destinations = latLongDF.loc[car,'destinations']
     # GET INDEX OF NEXT DESTINATION
-    destIndex = carDataDF.loc[car, 'destIndex']
+    destIndex = carDataDF.loc[car,'destIndex']
     # GET LATITUDE AND LONGITUDE PARAMETERS
     currLat, currLong = carDataDF.loc[car, 'lat'], carDataDF.loc[car, 'long']
     destLat, destLong = carDataDF.loc[car, 'destLat'], carDataDF.loc[car, 'destLong']
@@ -196,11 +196,11 @@ def rapidCharge(car, carDataDF, rcRate, rcPrice, totalCost):
 #   FOR CARS THAT NEED RAPID CHARGING: RAPID CHARGE
 #   FOR CARS THAT DON'T NEED RAPID CHARGING: DECREASE BATT
 #########################################################################
-def driving(time, carDataDF, driveDataByCar, ind, breaksDF, rcData, latLongDF, sim):
+def drive(time, carDataDF, driveDataByCar, ind, breaksDF, rcData, latLongDF, sim):
     # EXTRACT RAPID CHARGE DATA
-    rcPrice = getData(rcData, 'rcPrice')        # PRICE PER KW OF RAPID CHARGE (£ PER KW)
-    rcPerc = getData(rcData, 'rcPerc')          # WHAT PERCENTAGE TO START RAPID CHARGING (%)
-    rcRate = getData(rcData, 'rcRate')          # RATE OF RAPID CHARGING (KW/HR)
+    rcPrice = getData(rcData,'rcPrice') # PRICE PER KW OF RAPID CHARGE (£ PER KW)
+    rcPerc = getData(rcData,'rcPerc')   # WHAT PERCENTAGE TO START RAPID CHARGING (%)
+    rcRate = getData(rcData,'rcRate')   # RATE OF RAPID CHARGING (KW/HR)
 
     # FIND CARS OUTSIDE OF DEPOT
     drivingCarsDF = carDataDF.loc[carDataDF["inDepot"]==0]

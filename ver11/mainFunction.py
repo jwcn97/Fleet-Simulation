@@ -21,13 +21,11 @@ def runSimulation(startTime, runTime, rcData, latLongData,
     #   Generate dataframes from csv inputs
     carDataDF, chargePtDF, latLongDF = generateDF(fleetData, latLongData, carCols, cpCols, latLongCols)
 
+    # PREPARE SIMULATION LIST
     sim = []
-    depot = []
+    # CREATE LIBRARY FOR DRIVING DATA
     driveDataByCar = {}
     for car in range(0, len(carDataDF)):
-        # APPEND CARS INTO DEPOT AT START TIME
-        if carDataDF.loc[car,'inDepot']: depot.append(car)
-        # CREATE LIBRARY FOR DRIVING DATA
         findData = driveDataDF.loc[driveDataDF['car']==car]
         dataNoIndex = findData.reset_index(drop=True)
         driveDataByCar['%s' % car] = dataNoIndex
@@ -41,6 +39,10 @@ def runSimulation(startTime, runTime, rcData, latLongData,
     # CHOOSE START TIME
     time = startTime
 
+    # DETERMINE IF PREDICTIVE ALGORITHM IS RUNNING
+    if algo == predictiveCharge: predictive = True
+    else:                        predictive = None
+
     # RUN SIMULATION FOR ALL OF RUN TIME
     for i in range(0, runTime*chunks):
         # INITIALISE A VARIABLE TO CHECK FOR EVENT CHANGES
@@ -48,28 +50,26 @@ def runSimulation(startTime, runTime, rcData, latLongData,
         # GET STATUS OF DEPOT
         depot = getDepotStatus(time, depotStatus)
 
-        # *** RUN FUNCTIONS THAT INCLUDE WILL RECOGNISE CHANGES IN EVENTS ***
+        # *** RUN FUNCTIONS THAT WILL RECOGNISE CHANGES IN EVENTS ***
         eventChange, carDataDF, chargePtDF = inOutDepot(time, carDataDF, shiftsByCar, latLongDF, chargePtDF, eventChange)
         eventChange, carDataDF = readFullBattCars(carDataDF, sim, eventChange)
-        eventChange, carDataDF = readCarsWithEnoughBatt(carDataDF, sim, eventChange)
+        eventChange, carDataDF = readCarsWithEnoughBatt(carDataDF, sim, eventChange, predictive)
         eventChange = readTariffChanges(time, pricesDF, eventChange)
-        eventChange = predictExtraCharging(time, pricesDF, depot, carDataDF, shiftsByCar, availablePower, eventChange)
+        eventChange = predictExtraCharging(time, pricesDF, depot, carDataDF, shiftsByCar, availablePower, eventChange, predictive)
 
-        # # PREDICT BATTERY NEEDED BY VEHICLE AND UPDATE CARDATADF
-        carDataDF = predictBatteryNeeded(time, carDataDF, driveDataByCar, i, shiftsByCar, depotStatus, availablePower)
+        # PREDICT BATTERY NEEDED BY VEHICLES AND UPDATE CARDATADF
+        carDataDF = predictBatteryNeeded(time, carDataDF, driveDataByCar, i, shiftsByCar, depotStatus, availablePower, predictive)
 
-        # *** RUN FUNCTIONS AFFECTING CARS OUTSIDE THE DEPOT ***
-        # DECREASE BATT/RAPID CHARGE CARS OUTSIDE THE DEPOT
-        carDataDF, sim = driving(time, carDataDF, driveDataByCar, i, breaksDF, rcData, latLongDF, sim)
+        # FOR CARS OUTSIDE THE DEPOT: DECREASE BATT/RAPID CHARGE CARS OUTSIDE THE DEPOT
+        carDataDF, sim = drive(time, carDataDF, driveDataByCar, i, breaksDF, rcData, latLongDF, sim)
 
-        # *** RUN FUNCTIONS AFFECTING CARS IN THE DEPOT ***
-        # IF THERE IS AN EVENT CHANGE and THERE ARE CARS THAT REQUIRE CHARGING
+        # FOR CARS INSIDE THE DEPOT: IF THERE IS AN EVENT CHANGE
         if (eventChange) and (len(depot) > 0):
             # RUN CHARGING ALGORITHM
             carDataDF = algo(time, carDataDF, depot, shiftsByCar, availablePower, chargePtDF, pricesDF, eventChange)
 
         # CHARGE/READ WAITING CARS IN THE DEPOT
-        carDataDF, sim = charge(time, carDataDF, sim, pricesDF)
+        carDataDF, sim = charge(time, carDataDF, sim, pricesDF, predictive)
 
         # FORMAT TOTAL COST COLUMN IN SIMULATION DF
         sim = adjustTotalCost(time, sim)
@@ -82,4 +82,4 @@ def runSimulation(startTime, runTime, rcData, latLongData,
 
     print(carDataDF['totalCost'].sum())
 
-    return simulationDF, carDataDF['rcCount'].sum(), carDataDF['totalCost'].sum()
+    return simulationDF, carDataDF[["battkW","totalCost","totalDistance","rcCount"]]

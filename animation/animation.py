@@ -57,7 +57,7 @@ def visualise(figure, matrix, time, cm, index):
     spaces = 11
     timeStr1 = timeStr.rjust(len(timeStr)+spaces)   # add spaces to the left
     timeStr2 = timeStr1.ljust(len(timeStr1)+spaces) # add spaces to the right
-    plt.title("DEPO" + timeStr2 + "DRIVE",          # set title
+    plt.title("DEPOT" + timeStr2 + "DRIVE",          # set title
               fontweight='bold',
               fontsize=17)
     

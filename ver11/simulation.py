@@ -10,12 +10,13 @@ from stylingFunctions import styleDF
 from graphFunctions import *
 
 # SELECT PARAMETERS
-outputFolder = "results/"
-tariff = "BritishGas"
+outputFolder = "new_new_results/"
+tariff = input("Tariff: ")#"Octopus"
 rcNetwork = "Ecotricity"
-schedule = "shift4"
+fleetType = int(input("Fleet Type: "))#0
+schedule = input("Shift: ")#"shift1"
 hasBreak = 0
-fleetType = 6
+caseName = input("Case Name: ")#"case2"
 runTime = 24*5                              # (UNITS:  HRS)
 startTime = readTime("2019-01-01 06:00:00") # (FORMAT: DATETIME)
 
@@ -30,81 +31,55 @@ fleetDF = pd.read_csv("csv/fleetData.csv", sep=";", index_col=None)
 fleetData = fleetDF.loc[fleetDF.index == fleetType]
 rcDF = pd.read_csv("csv/rcData.csv", sep=";", index_col=None)
 rcData = rcDF.loc[rcDF.company == rcNetwork]
-
 latLongData = pd.read_csv("csv/latLongData.csv", sep=";", index_col=None)
 
-# dumbDF, dumbRC, dumbCost = runSimulation(startTime, runTime, rcData, latLongData,
+# dumbDF, dumbData = runSimulation(startTime, runTime, rcData, latLongData,
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, dumbCharge)
 
-# leaveTDF, leaveTRC, leaveTCost = runSimulation(startTime, runTime, rcData, latLongData,
+# leaveTDF, leaveTData = runSimulation(startTime, runTime, rcData, latLongData,
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_leavetime)
 
-# battDF, battRC, battCost = runSimulation(startTime, runTime, rcData, latLongData,
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_batt)
-
-# smartDF, smartRC, smartCost = runSimulation(startTime, runTime, rcData, latLongData,
+# smartDF, smartData = runSimulation(startTime, runTime, rcData, latLongData,
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_battOverLeavetime)
 
-# costDF, costRC, costCost = runSimulation(startTime, runTime, rcData, latLongData,
+# costDF, costData = runSimulation(startTime, runTime, rcData, latLongData,
 #                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, costSensitiveCharge)
 
-extraDF, extraRC, extraCost = runSimulation(startTime, runTime, rcData, latLongData,
+extraDF, extraData = runSimulation(startTime, runTime, rcData, latLongData,
+                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, extraCharge)
+
+predictiveDF, predictiveData = runSimulation(startTime, runTime, rcData, latLongData,
                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, predictiveCharge)
-# styleDF(extraDF).to_excel('test.xlsx')
 
-# predictiveDF, predictiveRC, predictiveCost = runSimulation(startTime, runTime, rcData, latLongData,
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, predictiveCharge)
-
-# resultDF = pd.DataFrame(columns=['dumbRC','leaveTRC','battRC','smartRC','costRC','extraRC',
-#                                 'dumbCost','leaveTCost','battCost','smartCost','costCost','extraCost'])
-
-# resultDF = resultDF.append({
-#     'dumbRC':dumbRC,
-#     'leaveTRC':leaveTRC,
-#     'battRC':battRC,
-#     'smartRC':smartRC,
-#     'costRC':costRC,
-#     'extraRC':extraRC,
-#     'dumbCost':dumbCost,
-#     'leaveTCost':leaveTCost,
-#     'battCost':battCost,
-#     'smartCost':smartCost,
-#     'costCost':costCost,
-#     'extraCost':extraCost
-# }, ignore_index=True)
-
-# ###############################################################
-# # SAVE TO EXCEL (ONLY RUN WHEN ALL ALGORITHMS ARE UNCOMMENTED)
-# # NOTE: CREATE AN OUTPUT FOLDER FIRST
-# ###############################################################
-# # open writer
-# writer = pd.ExcelWriter(outputFolder + "fleet" + str(fleetType) + "_case5.xlsx")
-# # write files
+###############################################################
+# SAVE TO EXCEL (ONLY RUN WHEN ALL ALGORITHMS ARE UNCOMMENTED)
+# NOTE: CREATE AN OUTPUT FOLDER FIRST
+###############################################################
+# open writer
+writer = pd.ExcelWriter(outputFolder + "fleet" + str(fleetType) + "_" + caseName + ".xlsx")
+# write files
 # styleDF(dumbDF).to_excel(writer, sheet_name="dumb")
 # styleDF(leaveTDF).to_excel(writer, sheet_name="leavetime")
-# styleDF(battDF).to_excel(writer, sheet_name="batt")
 # styleDF(smartDF).to_excel(writer, sheet_name="smart")
 # styleDF(costDF).to_excel(writer, sheet_name="cost")
-# styleDF(extraDF).to_excel(writer, sheet_name="extra")
-# resultDF.to_excel(writer, sheet_name="results")
-# # close writer
-# writer.save()
+styleDF(extraDF).to_excel(writer, sheet_name="extra")
+styleDF(predictiveDF).to_excel(writer, sheet_name="predictive")
+# dumbData.to_excel(writer, sheet_name="dumbData")
+# leaveTData.to_excel(writer, sheet_name="leavetimeData")
+# smartData.to_excel(writer, sheet_name="smartData")
+# costData.to_excel(writer, sheet_name="costData")
+extraData.to_excel(writer, sheet_name="extraData")
+predictiveData.to_excel(writer, sheet_name="predictiveData")
+# close writer
+writer.save()
 
 # total_cars = 4
-# total_algos = 6
-
 # for car in range(total_cars):
 #     result = pd.concat([getCarDF(dumbDF, 'dumb', car),
 #                         getCarDF(leaveTDF, 'leavetime', car),
 #                         getCarDF(battDF, 'batt', car),
 #                         getCarDF(smartDF, 'smart', car),
 #                         getCarDF(costDF, 'cost', car),
-#                         getCarDF(extraDF, 'extra', car)])
-#     compareAlgo(outputFolder+schedule, result, car, total_algos, company)
-
-# compareCars(outputFolder+schedule, dumbDF, 'dumb', total_cars, company)
-# compareCars(outputFolder+schedule, leaveTDF, 'leavetime', total_cars, company)
-# compareCars(outputFolder+schedule, battDF, 'batt', total_cars, company)
-# compareCars(outputFolder+schedule, smartDF, 'smart', total_cars, company)
-# compareCars(outputFolder+schedule, costDF, 'cost', total_cars, company)
-# compareCars(outputFolder+schedule, extraDF, 'extra', total_cars, company)
+#                         getCarDF(extraDF, 'extra', car),
+#                         getCarDF(predictiveDF, 'predictive', car)])
+#     compareAlgo(outputFolder + "fleet" + str(fleetType) + "_case2_visuals", result, car, 7, company)
