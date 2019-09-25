@@ -80,6 +80,4 @@ def runSimulation(startTime, runTime, rcData, latLongData,
     # CONVERT SIMULATION LIST TO DATAFRAME
     simulationDF = pd.DataFrame.from_records(sim, columns=simCols)
 
-    print(carDataDF['totalCost'].sum())
-
     return simulationDF, carDataDF[["battkW","totalCost","totalDistance","rcCount"]]

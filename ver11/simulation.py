@@ -33,17 +33,17 @@ rcDF = pd.read_csv("csv/rcData.csv", sep=";", index_col=None)
 rcData = rcDF.loc[rcDF.company == rcNetwork]
 latLongData = pd.read_csv("csv/latLongData.csv", sep=";", index_col=None)
 
-# dumbDF, dumbData = runSimulation(startTime, runTime, rcData, latLongData,
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, dumbCharge)
+dumbDF, dumbData = runSimulation(startTime, runTime, rcData, latLongData,
+                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, dumbCharge)
 
-# leaveTDF, leaveTData = runSimulation(startTime, runTime, rcData, latLongData,
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_leavetime)
+leaveTDF, leaveTData = runSimulation(startTime, runTime, rcData, latLongData,
+                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_leavetime)
 
-# smartDF, smartData = runSimulation(startTime, runTime, rcData, latLongData,
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_battOverLeavetime)
+smartDF, smartData = runSimulation(startTime, runTime, rcData, latLongData,
+                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_battOverLeavetime)
 
-# costDF, costData = runSimulation(startTime, runTime, rcData, latLongData,
-#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, costSensitiveCharge)
+costDF, costData = runSimulation(startTime, runTime, rcData, latLongData,
+                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, costSensitiveCharge)
 
 extraDF, extraData = runSimulation(startTime, runTime, rcData, latLongData,
                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, extraCharge)
@@ -58,16 +58,16 @@ predictiveDF, predictiveData = runSimulation(startTime, runTime, rcData, latLong
 # open writer
 writer = pd.ExcelWriter(outputFolder + "fleet" + str(fleetType) + "_" + caseName + ".xlsx")
 # write files
-# styleDF(dumbDF).to_excel(writer, sheet_name="dumb")
-# styleDF(leaveTDF).to_excel(writer, sheet_name="leavetime")
-# styleDF(smartDF).to_excel(writer, sheet_name="smart")
-# styleDF(costDF).to_excel(writer, sheet_name="cost")
+styleDF(dumbDF).to_excel(writer, sheet_name="dumb")
+styleDF(leaveTDF).to_excel(writer, sheet_name="leavetime")
+styleDF(smartDF).to_excel(writer, sheet_name="smart")
+styleDF(costDF).to_excel(writer, sheet_name="cost")
 styleDF(extraDF).to_excel(writer, sheet_name="extra")
 styleDF(predictiveDF).to_excel(writer, sheet_name="predictive")
-# dumbData.to_excel(writer, sheet_name="dumbData")
-# leaveTData.to_excel(writer, sheet_name="leavetimeData")
-# smartData.to_excel(writer, sheet_name="smartData")
-# costData.to_excel(writer, sheet_name="costData")
+dumbData.to_excel(writer, sheet_name="dumbData")
+leaveTData.to_excel(writer, sheet_name="leavetimeData")
+smartData.to_excel(writer, sheet_name="smartData")
+costData.to_excel(writer, sheet_name="costData")
 extraData.to_excel(writer, sheet_name="extraData")
 predictiveData.to_excel(writer, sheet_name="predictiveData")
 # close writer

@@ -217,7 +217,7 @@ def unpackShifts(carData, allShiftsDF):
 
     return shiftsByCar
 
-# GENERATES DEPOT STATUS DATAFRAME FOR EVERY TIME WHEN INOUTDEPOT EVENT OCCURS
+# GENERATES DEPOT STATUS DATAFRAME FOR EVERY POSSIBLE TIME WHEN INOUTDEPOT EVENT OCCURS
 def generateDepotStatus(carData, shiftsByCar):
     eventTimes = pd.DataFrame(columns=["time","car","events"])
 
