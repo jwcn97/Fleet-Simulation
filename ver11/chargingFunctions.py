@@ -56,7 +56,7 @@ def priorityCharge(priorityRows, availablePower, carDataDF, chargePtDF):
 
             # IF CHARGE RATE EXCEEDS MAX RATE:
             if chargeRate > maxRate: chargeRate = maxRate
-            # IF CHARGE RATE EXCEEDS CHARGE NEEDED:
+            # IF CHARGE RATE EXCEEDS CHARGE NEEDED BY VEHICLE:
             if chargeRate/chunks > battLeft: chargeRate = battLeft*chunks
 
             # ADJUST REMAINING AVAILABLE POWER AND PRIORITY SUM

@@ -10,7 +10,7 @@ from stylingFunctions import styleDF
 from graphFunctions import *
 
 # SELECT PARAMETERS
-outputFolder = "new_new_results/"
+outputFolder = "final_results/"
 tariff = input("Tariff: ")#"Octopus"
 rcNetwork = "Ecotricity"
 fleetType = int(input("Fleet Type: "))#0
