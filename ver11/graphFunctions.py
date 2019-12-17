@@ -28,6 +28,22 @@ def labelTickers(startTime, modulo):
             slots.append(None)
     return np.array(slots)
 
+# show low tariff zone on the graph
+def shadeLTZone(ax, df, company):
+    if company == 'BritishGas':
+        ax.axvspan(df.index[0*chunks], df.index[1*chunks], facecolor='b', alpha=0.2)
+        ax.axvspan(df.index[(5*24-5)*chunks], df.index[(5*24-1)*chunks], facecolor='b', alpha=0.2)
+        for day in range(1, 5):
+            ax.axvspan(df.index[(day*24-5)*chunks], df.index[(day*24+2)*chunks], facecolor='b', alpha=0.2)
+    elif company == 'OriginalTest':
+        ax.axvspan(df.index[(5*24-6)*chunks], df.index[(5*24-1)*chunks], facecolor='b', alpha=0.2)
+        for day in range(1, 5):
+            ax.axvspan(df.index[(day*24-6)*chunks], df.index[(day*24+1)*chunks], facecolor='b', alpha=0.2)
+    elif company == 'Octopus':
+        ax.axvspan(df.index[int((5*24-5.5)*chunks)], df.index[(5*24-1)*chunks], facecolor='b', alpha=0.2)
+        for day in range(1, 5):
+            ax.axvspan(df.index[int((day*24-5.5)*chunks)], df.index[int((day*24-1.5)*chunks)], facecolor='b', alpha=0.2)
+
 ##################################################
 # create graph to compare battery kW between cars
 ##################################################
@@ -37,7 +53,7 @@ def compareCars(filename, sim, algo, total_cars, company):
     
     for cars in range(total_cars):
         ax.scatter(testDF.index, np.ones(len(testDF.index))*cars, 
-                c=testDF['batt'].iloc[:,cars], cmap="Greens", vmin=-11, vmax=35, 
+                c=testDF['batt'][cars], cmap="Greens", vmin=-11, vmax=35, 
                 s=(testDF['batt'][cars]**2.1).apply(int))
 
     for time in range(len(testDF.index)):
@@ -47,23 +63,19 @@ def compareCars(filename, sim, algo, total_cars, company):
         ax.axvline(x=testDF.index[time], ymin=-1, ymax=1, 
                 color='black', linestyle='-', lw=0.7, alpha=alphaVal)
 
-        # label RC and Wait events
+        # label Wait events
+        for k in range(total_cars):
+            if testDF['event'].iloc[time,k] == 'drive':
+                ax.scatter(testDF.index[time], k, c='#fcbe03', s=(testDF['batt'].iloc[time,k]**2.1))
+
+    for time in range(len(testDF.index)):
+        # label RC events
         for k in range(total_cars):
             if testDF['event'].iloc[time,k] == 'RC':
                 ax.scatter(testDF.index[time], k, c='red', s=(testDF['batt'].iloc[time+1,k]**2.1))
-            elif testDF['event'].iloc[time,k] == 'wait':
-                ax.scatter(testDF.index[time], k, c='#fcbe03', s=(testDF['batt'].iloc[time,k]**2.1))
 
-    # mark the green zone (cheap to charge)
-    if company == 'BritishGas':
-        ax.axvspan(testDF.index[0*chunks], testDF.index[1*chunks], facecolor='b', alpha=0.2)
-        ax.axvspan(testDF.index[(5*24-5)*chunks], testDF.index[(5*24-1)*chunks], facecolor='b', alpha=0.2)
-        for day in range(1, 5):
-            ax.axvspan(testDF.index[(day*24-5)*chunks], testDF.index[(day*24+1)*chunks], facecolor='b', alpha=0.2)
-    elif company == 'OriginalTest':
-        ax.axvspan(testDF.index[(5*24-6)*chunks], testDF.index[(5*24-1)*chunks], facecolor='b', alpha=0.2)
-        for day in range(1, 5):
-            ax.axvspan(testDF.index[(day*24-6)*chunks], testDF.index[(day*24)*chunks], facecolor='b', alpha=0.2)
+    # show low tariff zone on the graph
+    shadeLTZone(ax, testDF, company)
 
     ax.yaxis.set_ticks(np.arange(0,total_cars,1))
     ax.xaxis.set_ticks(testDF.index)
@@ -94,27 +106,20 @@ def compareAlgo(filename, sim, car, total_algos, company):
         ax.axvline(x=testDF.index[time], ymin=-1, ymax=1, 
                 color='black', linestyle='-', lw=lwVal, alpha=alphaVal)
         
-        # label RC and Wait events (red and yellow respectively)
-        # shade regions of time where vehicle is outside driving
+        # label drive events
+        for k in range(total_algos):
+            if testDF['event'].iloc[time,k] == 'drive':
+                ax.scatter(testDF.index[time], k, c='#fcbe03', s=(testDF['batt'].iloc[time,k]**2.1))
+
+    for time in range(len(testDF.index)):
+        # label RC events
         for k in range(total_algos):
             if testDF['event'].iloc[time,k] == 'RC':
                 ax.scatter(testDF.index[time], k, c='red', s=(testDF['batt'].iloc[time+1,k]**2.1))
                 ax.axvspan(testDF.index[time], testDF.index[time+1], facecolor='r', alpha=0.1)
-            elif testDF['event'].iloc[time,k] == 'wait':
-                ax.scatter(testDF.index[time], k, c='#fcbe03', s=(testDF['batt'].iloc[time,k]**2.1))
-            elif testDF['event'].iloc[time,k] == 'drive':
-                ax.axvspan(testDF.index[time], testDF.index[time+1], facecolor='r', alpha=0.1)
 
-    # mark the green zone (cheap to charge)
-    if company == 'BritishGas':
-        ax.axvspan(testDF.index[0*chunks], testDF.index[1*chunks], facecolor='b', alpha=0.2)
-        ax.axvspan(testDF.index[(5*24-5)*chunks], testDF.index[(5*24-1)*chunks], facecolor='b', alpha=0.2)
-        for day in range(1, 5):
-            ax.axvspan(testDF.index[(day*24-5)*chunks], testDF.index[(day*24+1)*chunks], facecolor='b', alpha=0.2)
-    elif company == 'OriginalTest':
-        ax.axvspan(testDF.index[(5*24-6)*chunks], testDF.index[(5*24-1)*chunks], facecolor='b', alpha=0.2)
-        for day in range(1, 5):
-            ax.axvspan(testDF.index[(day*24-6)*chunks], testDF.index[(day*24)*chunks], facecolor='b', alpha=0.2)
+    # show low tariff zone on the graph
+    shadeLTZone(ax, testDF, company)
 
     ax.yaxis.set_ticks(np.arange(0,total_algos,1))
     ax.set_yticklabels(np.array(['BATT','COST','DUMB','EXTRA','LEAVETIME','SMART']), fontdict={'fontsize':18})

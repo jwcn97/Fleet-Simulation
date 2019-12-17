@@ -10,19 +10,19 @@ from stylingFunctions import styleDF
 from graphFunctions import *
 
 # SELECT PARAMETERS
-outputFolder = "final_results/"
-tariff = input("Tariff: ")#"Octopus"
+outputFolder = "predictive_test/"
+tariff = "Octopus"
 rcNetwork = "Ecotricity"
-fleetType = int(input("Fleet Type: "))#0
-schedule = input("Shift: ")#"shift1"
+fleetType = 1
+schedule = "shift_drax_5"
 hasBreak = 0
-caseName = input("Case Name: ")#"case2"
+caseName = "case5"
 runTime = 24*5                              # (UNITS:  HRS)
 startTime = readTime("2019-01-01 06:00:00") # (FORMAT: DATETIME)
 
 # READ IN NECESSARY CSV FILES
 allShiftsDF = pd.read_csv("csv/schedules/" + schedule + ".csv", sep=";", index_col=None)
-drivingDF = pd.read_csv("csv/driving/constantDriving.csv", sep=";", index_col=None)
+drivingDF = pd.read_csv("csv/driving/constantDriving_changed.csv", sep=";", index_col=None)
 pricesDF = pd.read_csv("csv/prices.csv", sep=";", index_col=None)
 pricesDF = pricesDF.loc[pricesDF.company == tariff]
 breaksDF = pd.read_csv("csv/breaks.csv", sep=";", index_col=None)
@@ -33,45 +33,48 @@ rcDF = pd.read_csv("csv/rcData.csv", sep=";", index_col=None)
 rcData = rcDF.loc[rcDF.company == rcNetwork]
 latLongData = pd.read_csv("csv/latLongData.csv", sep=";", index_col=None)
 
-dumbDF, dumbData = runSimulation(startTime, runTime, rcData, latLongData,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, dumbCharge)
+# dumbDF, dumbData = runSimulation(startTime, runTime, rcData, latLongData,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, dumbCharge)
 
-leaveTDF, leaveTData = runSimulation(startTime, runTime, rcData, latLongData,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_leavetime)
+# leaveTDF, leaveTData = runSimulation(startTime, runTime, rcData, latLongData,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_leavetime)
 
-smartDF, smartData = runSimulation(startTime, runTime, rcData, latLongData,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_battOverLeavetime)
+# smartDF, smartData = runSimulation(startTime, runTime, rcData, latLongData,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, smartCharge_battOverLeavetime)
 
-costDF, costData = runSimulation(startTime, runTime, rcData, latLongData,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, costSensitiveCharge)
+# costDF, costData = runSimulation(startTime, runTime, rcData, latLongData,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, costSensitiveCharge)
 
-extraDF, extraData = runSimulation(startTime, runTime, rcData, latLongData,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, extraCharge)
+# extraDF, extraData = runSimulation(startTime, runTime, rcData, latLongData,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, extraCharge)
 
-predictiveDF, predictiveData = runSimulation(startTime, runTime, rcData, latLongData,
-                        fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, predictiveCharge)
+# predictiveDF, predictiveData = runSimulation(startTime, runTime, rcData, latLongData,
+#                         fleetData, drivingDF, allShiftsDF, breaksDF, pricesDF, predictiveCharge)
 
-###############################################################
-# SAVE TO EXCEL (ONLY RUN WHEN ALL ALGORITHMS ARE UNCOMMENTED)
-# NOTE: CREATE AN OUTPUT FOLDER FIRST
-###############################################################
-# open writer
-writer = pd.ExcelWriter(outputFolder + "fleet" + str(fleetType) + "_" + caseName + ".xlsx")
-# write files
-styleDF(dumbDF).to_excel(writer, sheet_name="dumb")
-styleDF(leaveTDF).to_excel(writer, sheet_name="leavetime")
-styleDF(smartDF).to_excel(writer, sheet_name="smart")
-styleDF(costDF).to_excel(writer, sheet_name="cost")
-styleDF(extraDF).to_excel(writer, sheet_name="extra")
-styleDF(predictiveDF).to_excel(writer, sheet_name="predictive")
-dumbData.to_excel(writer, sheet_name="dumbData")
-leaveTData.to_excel(writer, sheet_name="leavetimeData")
-smartData.to_excel(writer, sheet_name="smartData")
-costData.to_excel(writer, sheet_name="costData")
-extraData.to_excel(writer, sheet_name="extraData")
-predictiveData.to_excel(writer, sheet_name="predictiveData")
-# close writer
-writer.save()
+# ###############################################################
+# # SAVE TO EXCEL (ONLY RUN WHEN ALL ALGORITHMS ARE UNCOMMENTED)
+# # NOTE: CREATE AN OUTPUT FOLDER FIRST
+# ###############################################################
+# # open writer
+# writer = pd.ExcelWriter(outputFolder + "fleet" + str(fleetType) + "_" + caseName + ".xlsx")
+# # write files
+# styleDF(dumbDF).to_excel(writer, sheet_name="dumb")
+# styleDF(leaveTDF).to_excel(writer, sheet_name="leavetime")
+# styleDF(smartDF).to_excel(writer, sheet_name="smart")
+# styleDF(costDF).to_excel(writer, sheet_name="cost")
+# styleDF(extraDF).to_excel(writer, sheet_name="extra")
+# styleDF(predictiveDF).to_excel(writer, sheet_name="predictive")
+# dumbData.to_excel(writer, sheet_name="dumbData")
+# leaveTData.to_excel(writer, sheet_name="leavetimeData")
+# smartData.to_excel(writer, sheet_name="smartData")
+# costData.to_excel(writer, sheet_name="costData")
+# extraData.to_excel(writer, sheet_name="extraData")
+# predictiveData.to_excel(writer, sheet_name="predictiveData")
+# # close writer
+# writer.save()
+
+# compareCars(outputFolder + "fleet" + str(fleetType) + "_case5", dumbDF, 'dumb', 4, tariff)
+# compareCars(outputFolder + "fleet" + str(fleetType) + "_case5", predictiveDF, 'predictive', 4, tariff)
 
 # total_cars = 4
 # for car in range(total_cars):

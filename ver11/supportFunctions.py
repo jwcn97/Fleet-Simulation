@@ -527,7 +527,7 @@ def predictBatteryNeeded(time, carDataDF, driveDataByCar, ind, shiftsByCar, depo
         batt = carDataDF.loc[car, 'battkW']
         battSize = carDataDF.loc[car, 'battSize']
         # SET BUFFER FOR BATTERY NEEDED
-        battNeeded = battSize * 10/100
+        battNeeded = battSize*0.05
 
         # FOR VEHICLES DRIVING, LOOK INTO MOST IMMEDIATE DRIVING CYCLE
         if carDataDF.loc[car, 'inDepot'] == 0:
@@ -537,17 +537,16 @@ def predictBatteryNeeded(time, carDataDF, driveDataByCar, ind, shiftsByCar, depo
             battNeeded += battNeededForShift(time, time, endDrive, driveDataByCar, ind, car)
 
         # FOR VEHICLES IN DEPOT, LOOK INTO NEXT 2 DRIVING CYCLES AND NEXT CHARGING CYCLE
+        # (IF WE ARE RUNNING PREDICTIVE ALGORITHM)
         elif predictive:
-            # SET START AND END DRIVE TIMES
+            # GET START AND END DRIVE TIMES
             startDrive, endDrive = nextShift(car, carDataDF, shiftsByCar)
             nextStartDrive, nextEndDrive = nextNextShift(car, carDataDF, shiftsByCar)
 
             # PREDICT BATTERY NEEDED FOR THE MOST IMMEDIATE DRIVING SHIFT
             battNeeded += battNeededForShift(time, startDrive, endDrive, driveDataByCar, ind, car)
-            # PREDICT BATTERY GAINED FROM THE NEXT CHARGING CYCLE
-            # battNeeded -= battGainedFromCharge(endDrive, nextStartDrive, depotStatus, availablePower)
             # PREDICT BATTERY NEEDED FOR THE NEXT DRIVING SHIFT
-            battNeeded += battNeededForShift(time, nextStartDrive, nextEndDrive, driveDataByCar, ind, car)/3
+            battNeeded += battNeededForShift(time, nextStartDrive, nextEndDrive, driveDataByCar, ind, car)
 
         # IF BATTERY NEEDED IS MORE THAN BATTERY SIZE, REQUIRE VEHICLE TO CHARGE TILL FULL
         if battNeeded > battSize: battNeeded = battSize
