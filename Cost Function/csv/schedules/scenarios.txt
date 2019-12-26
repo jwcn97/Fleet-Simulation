@@ -1,0 +1,7 @@
+shift0 - base case
+shift1 - base case with charging break
+shift2 - base case (variation)
+shift3 - base case with charging break (variation)
+shift4 - first shift same
+shift5 - second shift same
+shift6 - goods delivery

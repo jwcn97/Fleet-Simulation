@@ -1,103 +1,100 @@
 import pandas as pd
 import numpy as np
+import math
+from sim import *
 
-# purpose: to help conversion from DIESEL -> EV
-# next steps:
-# 1) more complicated schedule input, then compute max rate needed in depot => max cp needed
-# 2) mileage / dwell time to see how many vehicles we are able to charge in depot
+def rcMultiplier(address):
+    # cpList = list of CPs within 6miles of the address
+    # rcProb = cpList/(max possible CPs)
+    # rcIssues = (number of CPs in cpList with issues)/cpList
+    # rcAvailable = (available CPs in cpList)/cpList
+    
+    rcProb, rcIssues, rcAvailable = 0.4, 0.9, 0.8
+    
+    return 1/(rcProb * rcIssues * rcAvailable)
 
-"""
-Disclaimer: all calculations are done in a 1-day window period
-"""
-def costFunction(cpsNum, cpfNum, days, carNum):
-    # OCTOPUS: (12:30 ~ 16:30), LT price: £0.05, HT price: £0.14
-    # ECOTRICITY: RC price: £0.39
+def costFunction(cpsNum, cpfNum, carNum, rcProb):
+    ########################### SIMULATION PARAMETERS ###########################
+    days = 5 * 52
+    
+    # charge parameters
+    battSize = 38 # nissan leaf
+    mile_range = 115 # 95 - 200 mi
+    cpsRate, cpfRate, rcRate = 3, 7, 22 # kw/hr
 
-    battSize = 40
-
-    ########################### DRIVING ###########################
-    # ASSUME schedules are the same for all vehicles in the fleet
-    mileage, mpkw = 16, 4
-    drivingHours = 10.5
-    kwUsed = carNum * mileage/mpkw * drivingHours
-
-    ########################### DEPOT ###########################
-    # ASSUME that charge available in the depot is fully utilised
-    depotHours = 24 - drivingHours
-    chargeCapacity = (cpsNum * 3 + cpfNum * 7) * depotHours
-
-    ########################### CHARGE POINT ###########################
-    # ASSUME supply < demand, any excess is topped up by RC outside depot
-    if kwUsed < chargeCapacity:
-        toRC = 0
-        toCharge = kwUsed
-    else:
-        toRC = kwUsed - chargeCapacity
-        toCharge = chargeCapacity
-
-    ########################### RAPID CHARGING ###########################
-    rcRate = 22
-    rcHours = toRC/rcRate
-    usefulHrs =  (carNum * drivingHours) - rcHours
+    depotLimit = 35
+    
+    # fixed cost
+    cpsCost, cpfCost = 300, 650
+    carCost, depotCost = 29255, 30000
+    
+    # variable cost
+    lowTariff, highTariff = 0.05, 0.14
+    period = "00:30:00-04:30:00"
+    rcTariff, connectionFee = 0.39, 1
+    rcCostMultiplier = 1/(rcProb * 0.9 * 0.8)
+    # rcCostMultiplier = rcMultiplier('depot address')
+    
+    ########################### RUN SIMULATION ###########################
+    carData, depotNum = runSimulation("shift3", (cpsNum,cpsRate), (cpfNum,cpfRate),
+                                      (lowTariff,highTariff,period),
+                                      carNum, battSize, depotLimit)
 
     ########################### CALCULATE COST ###########################
-    # FIXED
-    infraCost = (cpsNum * 300) + (cpfNum * 800) + (carNum * 30000)
+    # OCTOPUS: LT Period (12:30 ~ 16:30), LT price: £0.05, HT price: £0.14
+    # ECOTRICITY: RC price: £0.39
+    
+    # FIXED COST
+    cpTotal = (cpsNum * cpsCost) + (cpfNum * cpfCost)
+    carTotal = carNum * carCost
+    depotTotal = depotNum * depotCost
 
-    # VARIABLE
-    chargeTariff = 0.14
-    rcTariff = 0.39
-    if toRC > 0: connectionFee = toRC/battSize
-    else:        connectionFee = 0
-    revRate = 55
+    # VARIABLE COST
+    chargeCost = carData.kwSupplied * highTariff
+    rcCost = (carData.toRC * rcTariff) + (carData.connection * connectionFee)
 
-    chargeCost = carNum * toCharge * chargeTariff
-    rcCost = toRC * rcTariff + connectionFee
-    rev = usefulHrs * revRate
+    return cpTotal + carTotal + depotTotal + days*(chargeCost + rcCost * rcCostMultiplier)
 
-    return infraCost + days*(chargeCost + rcCost - rev)
-
-def gradient_descent(days, cars):
-    # set limits
-    start_cps, end_cps = 1, 20
-    start_cpf, end_cpf = 1, 20
+def gradient_descent(cars, limit):
+    # define limits
+    start_cps, end_cps = 3, 10
+    start_cpf, end_cpf = 3, 10
     # set minimum
     min_cps = start_cps
     min_cpf = start_cpf
-    min_cost = costFunction(start_cps, start_cpf, days, cars)
+    min_cost = costFunction(start_cps, start_cpf, cars, limit)
 
     # Run the gradient
     for cpsNum in range(start_cps, end_cps+1):
         for cpfNum in range(start_cpf, end_cpf+1):
-            # depot supply limit
-            if cpsNum * 3 + cpfNum * 7 <= 40:
-                # compute cost
-                cost = costFunction(cpsNum, cpfNum, days, cars)
-                # update values if min is found
-                if cost < min_cost:
-                    min_cps, min_cpf = cpsNum, cpfNum
-                    min_cost = cost
+            # compute cost
+            cost = costFunction(cpsNum, cpfNum, cars, limit)
+            # update values if min is found
+            if cost < min_cost:
+                min_cps, min_cpf = cpsNum, cpfNum
+                min_cost = cost
     
     # Return minimum combination of values
     return min_cps, min_cpf, min_cost
 
-display = pd.DataFrame(columns=['simulation days', 'number of cars', 'number of slow charge points', 'number of fast charge points', 'minimum cost'])
+display = pd.DataFrame(columns=['cars', 'rcProb', 'slow CPs', 'fast CPs', 'min cost'])
 
 # define limits
-min_days, max_days = 15, 100
-min_cars, max_cars = 5, 30
+min_cars, max_cars, c_inc = 15, 30, 5
+min_limit, max_limit, limit_inc = 35, 44, 2
 
-for days in range(min_days, max_days+1):
-    for cars in range(min_cars, max_cars+1):
-        cps, cpf, cost = gradient_descent(days, cars)
+limit = [0.1,0.2,0.3,0.4,0.5]
+min_limit, max_limit, limit_inc = 0,4,1
+
+for cars in range(min_cars, max_cars+1, c_inc):
+    for i in range(min_limit, max_limit+1, limit_inc):
+        cps, cpf, cost = gradient_descent(cars, limit[i])
         display = display.append({
-            'simulation days': days,
-            'number of cars': cars,
-            'number of slow charge points': cps,
-            'number of fast charge points': cpf,
-            'minimum cost': cost
+            'cars': cars,
+            'rcProb': limit[i],
+            'slow CPs': cps,
+            'fast CPs': cpf,
+            'min cost': cost
         }, ignore_index=True)
 
-# print(display)
-
-display.to_csv('test2.csv')
+display.to_csv('test.csv')
