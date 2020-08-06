@@ -1,4 +1,4 @@
-# fleet_simulation 
+# :car: fleet_simulation 
 
 This project simulates and evaluates different charging algorithms for a fleet of vehicles in the depot based on a variety of factors such as:<br/>
 1) fleet schedule<br/>
